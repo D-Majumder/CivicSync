@@ -8,9 +8,15 @@ from ai.client import analyze_complaint
 from ai.schemas import CivicIssue
 from backend.database import get_db
 from backend.models import Issue
-from backend.repository import get_issue_by_public_id
-from backend.schemas import AnalyzeRequest, IssueResponse
-from backend.service import submit_complaint
+from backend.repository import get_issue_by_public_id, get_status_history
+from backend.schemas import (
+    AnalyzeRequest,
+    IssueResponse,
+    StatusHistoryEntryResponse,
+    StatusUpdateRequest,
+)
+from backend.service import submit_complaint, transition_issue
+from backend.transitions import InvalidTransitionError
 
 # Load environment variables from .env before anything else (e.g. ai/client.py)
 # reads them. Must run before any AI service call, since GEMINI_API_KEY is
@@ -127,3 +133,66 @@ def read_issue(public_id: str, db: Session = Depends(get_db)) -> Issue:
             detail="Issue not found.",
         )
     return issue
+
+
+@app.post(
+    "/api/issues/{public_id}/status",
+    response_model=IssueResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Transition a civic issue to a new status",
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Issue not found."},
+        status.HTTP_400_BAD_REQUEST: {
+            "description": "The requested status transition is not permitted."
+        },
+    },
+)
+def update_issue_status(
+    public_id: str, request: StatusUpdateRequest, db: Session = Depends(get_db)
+) -> Issue:
+    """Validate and apply a status transition, recording status history.
+
+    Transition rules live in backend/transitions.py; persistence lives in
+    backend/repository.py; backend/service.py orchestrates the lookup +
+    transition. This route only translates known failure modes into HTTP
+    responses. Does not call Gemini -- AI never drives status transitions.
+    """
+    try:
+        issue = transition_issue(db, public_id, request.status, request.reason)
+    except InvalidTransitionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from None
+    except SQLAlchemyError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update issue status. Please try again.",
+        ) from None
+
+    if issue is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Issue not found.",
+        )
+    return issue
+
+
+@app.get(
+    "/api/issues/{public_id}/history",
+    response_model=list[StatusHistoryEntryResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Retrieve the status history for a civic issue",
+    responses={status.HTTP_404_NOT_FOUND: {"description": "Issue not found."}},
+)
+def read_issue_status_history(
+    public_id: str, db: Session = Depends(get_db)
+) -> list[StatusHistoryEntryResponse]:
+    """Return an Issue's status history, oldest first. Does not call Gemini."""
+    issue = get_issue_by_public_id(db, public_id)
+    if issue is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Issue not found.",
+        )
+    return get_status_history(db, issue)

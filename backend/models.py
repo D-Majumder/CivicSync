@@ -17,9 +17,9 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Float, String, Text
+from sqlalchemy import DateTime, Float, ForeignKey, String, Text
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ai.schemas import IssueCategory, SeverityLevel
 from backend.database import Base
@@ -134,5 +134,63 @@ class Issue(Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Append-only audit trail of status transitions, most recent last.
+    # See IssueStatusHistory below.
+    status_history: Mapped[list["IssueStatusHistory"]] = relationship(
+        back_populates="issue",
+        order_by="IssueStatusHistory.changed_at",
+        cascade="all, delete-orphan",
+    )
+
     def __repr__(self) -> str:  # pragma: no cover - debugging convenience
         return f"<Issue public_id={self.public_id!r} status={self.status!r}>"
+
+
+class IssueStatusHistory(Base):
+    """Append-only audit trail of Issue.status transitions.
+
+    One row per transition, including the initial null -> SUBMITTED row
+    written alongside a new Issue (see backend/repository.py). Rows are
+    never updated or deleted -- this is a historical record, not
+    operational state.
+    """
+
+    __tablename__ = "issue_status_history"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    issue_id: Mapped[int] = mapped_column(
+        ForeignKey("issues.id"), nullable=False, index=True
+    )
+
+    # Null only for the very first history row (initial submission), which
+    # has no prior status to record.
+    from_status: Mapped[IssueStatus | None] = mapped_column(
+        SAEnum(
+            IssueStatus,
+            name="issue_status_history_from_status",
+            create_constraint=True,
+            validate_strings=True,
+        ),
+        nullable=True,
+    )
+    to_status: Mapped[IssueStatus] = mapped_column(
+        SAEnum(
+            IssueStatus,
+            name="issue_status_history_to_status",
+            create_constraint=True,
+            validate_strings=True,
+        ),
+        nullable=False,
+    )
+    changed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    issue: Mapped["Issue"] = relationship(back_populates="status_history")
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging convenience
+        return (
+            f"<IssueStatusHistory issue_id={self.issue_id!r} "
+            f"{self.from_status!r} -> {self.to_status!r}>"
+        )

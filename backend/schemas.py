@@ -58,3 +58,36 @@ class IssueResponse(BaseModel):
     updated_at: datetime
     resolved_at: datetime | None
     closed_at: datetime | None
+
+
+class StatusUpdateRequest(BaseModel):
+    """Request body for POST /api/issues/{public_id}/status.
+
+    `status` reuses the IssueStatus enum directly, so an unrecognized
+    status string is rejected by validation (422) before the route ever
+    runs -- the transition-legality check (400) happens separately, in
+    backend/transitions.py.
+    """
+
+    status: IssueStatus = Field(..., description="Requested new status for the issue.")
+    reason: str | None = Field(
+        default=None,
+        max_length=2000,
+        description="Optional human-readable reason for this transition.",
+        examples=["Repair crew has started replacing the damaged light."],
+    )
+
+
+class StatusHistoryEntryResponse(BaseModel):
+    """Public API representation of a single status-history row.
+
+    Excludes the row's own id and issue_id -- callers only ever look up
+    history by an Issue's public_id, never by these internal ids.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    from_status: IssueStatus | None
+    to_status: IssueStatus
+    reason: str | None
+    changed_at: datetime
