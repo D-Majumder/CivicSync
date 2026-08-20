@@ -17,7 +17,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Float, ForeignKey, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, Text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -106,9 +106,15 @@ class Issue(Base):
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
 
     # --- Official / operational data (never set from AI output) ----------
-    # The department actually assigned by staff. Independent of, and not
-    # derived from, suggested_department.
-    assigned_department: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # The department officially assigned by staff -- a real Department
+    # entity from the controlled registry (see Department below), NOT
+    # free text. Independent of, and never derived from,
+    # suggested_department above. Nullable: an issue may have no official
+    # assignment yet.
+    assigned_department_id: Mapped[int | None] = mapped_column(
+        ForeignKey("departments.id"), nullable=True
+    )
+    assigned_department: Mapped["Department | None"] = relationship()
     status: Mapped[IssueStatus] = mapped_column(
         SAEnum(
             IssueStatus,
@@ -193,4 +199,68 @@ class IssueStatusHistory(Base):
         return (
             f"<IssueStatusHistory issue_id={self.issue_id!r} "
             f"{self.from_status!r} -> {self.to_status!r}>"
+        )
+
+
+class Department(Base):
+    """A civic department in CivicSync's controlled registry.
+
+    This is the single source of truth for department identity -- an
+    Issue's official assigned_department is always a foreign key into
+    this table, never an arbitrary string (that's what
+    Issue.suggested_department, the AI's free-text recommendation, is
+    for). The registry is seeded once via Alembic data migration and is
+    not (yet) end-user-creatable.
+    """
+
+    __tablename__ = "departments"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    code: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
+    )
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging convenience
+        return f"<Department code={self.code!r} name={self.name!r}>"
+
+
+class IssueAssignmentHistory(Base):
+    """Append-only audit trail of official department assignments.
+
+    One row per assignment. Reassigning an issue closes the previous
+    active row (unassigned_at set) and opens a new one -- rows are never
+    deleted, so the full assignment history is always reconstructable.
+    """
+
+    __tablename__ = "issue_assignment_history"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    issue_id: Mapped[int] = mapped_column(ForeignKey("issues.id"), nullable=False, index=True)
+    department_id: Mapped[int] = mapped_column(
+        ForeignKey("departments.id"), nullable=False, index=True
+    )
+
+    assigned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    # Null while this is the active assignment; set when the issue is
+    # reassigned to a different department.
+    unassigned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    issue: Mapped["Issue"] = relationship()
+    department: Mapped["Department"] = relationship()
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging convenience
+        return (
+            f"<IssueAssignmentHistory issue_id={self.issue_id!r} "
+            f"department_id={self.department_id!r} unassigned_at={self.unassigned_at!r}>"
         )

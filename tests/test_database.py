@@ -15,7 +15,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
 
 from ai.schemas import CivicIssue, IssueCategory, SeverityLevel
-from backend.models import Issue, IssueStatus
+from backend.models import Department, Issue, IssueStatus
 from backend.repository import create_issue_from_civic_issue, get_issue_by_public_id
 
 
@@ -59,7 +59,7 @@ def test_issues_table_exists_with_expected_columns(db_session):
         "affected_population",
         "suggested_department",
         "confidence",
-        "assigned_department",
+        "assigned_department_id",
         "status",
         "resolution_summary",
         "created_at",
@@ -167,7 +167,7 @@ def test_updated_at_changes_on_update(db_session):
     issue = create_issue_from_civic_issue(db_session, _sample_civic_issue())
     original_updated_at = issue.updated_at
 
-    issue.assigned_department = "Public Works"
+    issue.resolution_summary = "Repair crew dispatched."
     db_session.commit()
     db_session.refresh(issue)
 
@@ -209,19 +209,26 @@ def test_resolved_at_is_only_set_by_an_explicit_operational_action(db_session):
 
 
 def test_suggested_and_assigned_department_are_independent(db_session):
+    """suggested_department (AI free text) and assigned_department (an
+    official Department entity, added in Milestone 6) are independent:
+    assigning a department never alters the AI's original suggestion."""
     civic_issue = _sample_civic_issue(suggested_department="Municipal Electrical Department")
     issue = create_issue_from_civic_issue(db_session, civic_issue)
 
     assert issue.suggested_department == "Municipal Electrical Department"
     assert issue.assigned_department is None
 
-    # Official assignment overrides nothing about the AI's own suggestion.
-    issue.assigned_department = "Ward 4 Public Works Office"
+    department = Department(code="ELECTRICITY", name="Electricity", is_active=True)
+    db_session.add(department)
+    db_session.commit()
+
+    issue.assigned_department_id = department.id
     db_session.commit()
     db_session.refresh(issue)
 
     assert issue.suggested_department == "Municipal Electrical Department"
-    assert issue.assigned_department == "Ward 4 Public Works Office"
+    assert issue.assigned_department is not None
+    assert issue.assigned_department.code == "ELECTRICITY"
 
 
 def test_ai_confidence_does_not_affect_official_status(db_session):

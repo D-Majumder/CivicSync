@@ -30,6 +30,19 @@ class AnalyzeRequest(BaseModel):
     )
 
 
+class DepartmentSummary(BaseModel):
+    """Minimal public department representation, nested inside IssueResponse.
+
+    Deliberately excludes the department's internal integer id -- code is
+    the only identifier ever exposed externally.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    code: str
+    name: str
+
+
 class IssueResponse(BaseModel):
     """Public API representation of a persisted civic issue.
 
@@ -51,7 +64,10 @@ class IssueResponse(BaseModel):
     affected_population: str | None
     suggested_department: str | None
     confidence: float
-    assigned_department: str | None
+    # The official assignment, as a structured Department reference (code +
+    # name) -- never the raw assigned_department_id, and never derived
+    # from suggested_department above. None if never officially assigned.
+    assigned_department: DepartmentSummary | None
     status: IssueStatus
     resolution_summary: str | None
     created_at: datetime
@@ -91,3 +107,71 @@ class StatusHistoryEntryResponse(BaseModel):
     to_status: IssueStatus
     reason: str | None
     changed_at: datetime
+
+
+class DepartmentResponse(BaseModel):
+    """Public API representation of a department, for GET /api/departments.
+
+    Excludes the department's internal integer id.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    code: str
+    name: str
+    description: str | None
+    is_active: bool
+
+
+class AssignmentRequest(BaseModel):
+    """Request body for POST /api/issues/{public_id}/assignment.
+
+    department_code is validated against the department registry (404 if
+    unknown, 400 if inactive) in backend/service.py -- it isn't a fixed
+    Python enum here because the registry is meant to be a controlled but
+    data-driven source of truth, not something baked into the API schema.
+    """
+
+    department_code: str = Field(
+        ...,
+        min_length=1,
+        description="Code of the department to assign this issue to.",
+        examples=["STREET_LIGHTING"],
+    )
+    reason: str | None = Field(
+        default=None,
+        max_length=2000,
+        description="Optional human-readable reason for this assignment.",
+        examples=["Complaint routed to the department responsible for street lighting."],
+    )
+
+
+class AssignmentResponse(BaseModel):
+    """Current assignment for an issue.
+
+    GET /api/issues/{public_id}/assignment returns this wrapped in `200`,
+    or a bare `200` with a JSON `null` body if the issue exists but has
+    never been assigned -- "never assigned" is a normal, expected state
+    for an issue, not an error, so it doesn't get a 404.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    code: str
+    name: str
+    assigned_at: datetime
+    reason: str | None
+
+
+class AssignmentHistoryEntryResponse(BaseModel):
+    """Public API representation of a single assignment-history row.
+
+    Excludes the row's own id, issue_id, and department_id -- department
+    identity is exposed via department_code/department_name instead.
+    """
+
+    department_code: str
+    department_name: str
+    assigned_at: datetime
+    unassigned_at: datetime | None
+    reason: str | None

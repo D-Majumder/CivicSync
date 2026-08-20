@@ -16,9 +16,12 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from ai.client import analyze_complaint
+from backend.assignment_rules import DepartmentInactiveError, DepartmentNotFoundError
 from backend.models import Issue, IssueStatus
 from backend.repository import (
+    assign_department_to_issue,
     create_issue_from_civic_issue,
+    get_department_by_code,
     get_issue_by_public_id,
     transition_issue_status,
 )
@@ -60,6 +63,37 @@ def transition_issue(
 
     try:
         return transition_issue_status(db, issue, to_status, reason)
+    except SQLAlchemyError:
+        db.rollback()
+        raise
+
+
+def assign_issue_department(
+    db: Session, public_id: str, department_code: str, reason: str | None = None
+) -> Issue | None:
+    """Look up an Issue and Department, then apply an official assignment.
+
+    Returns None if no Issue matches public_id (route -> 404).
+    Raises DepartmentNotFoundError if department_code doesn't match any
+    department (route -> 404). Raises DepartmentInactiveError if the
+    department exists but is inactive (route -> 400). Raises
+    AssignmentNotAllowedError (from backend.assignment_rules) if the
+    issue's status doesn't permit assignment (route -> 400). Raises
+    SQLAlchemyError on persistence failure, after rolling back (route ->
+    sanitized 500). Never calls Gemini.
+    """
+    issue = get_issue_by_public_id(db, public_id)
+    if issue is None:
+        return None
+
+    department = get_department_by_code(db, department_code)
+    if department is None:
+        raise DepartmentNotFoundError(department_code)
+    if not department.is_active:
+        raise DepartmentInactiveError(department_code)
+
+    try:
+        return assign_department_to_issue(db, issue, department, reason)
     except SQLAlchemyError:
         db.rollback()
         raise

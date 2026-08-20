@@ -6,16 +6,31 @@ from sqlalchemy.orm import Session
 
 from ai.client import analyze_complaint
 from ai.schemas import CivicIssue
+from backend.assignment_rules import (
+    AssignmentNotAllowedError,
+    DepartmentInactiveError,
+    DepartmentNotFoundError,
+)
 from backend.database import get_db
-from backend.models import Issue
-from backend.repository import get_issue_by_public_id, get_status_history
+from backend.models import Department, Issue
+from backend.repository import (
+    get_active_departments,
+    get_assignment_history,
+    get_current_assignment,
+    get_issue_by_public_id,
+    get_status_history,
+)
 from backend.schemas import (
     AnalyzeRequest,
+    AssignmentHistoryEntryResponse,
+    AssignmentRequest,
+    AssignmentResponse,
+    DepartmentResponse,
     IssueResponse,
     StatusHistoryEntryResponse,
     StatusUpdateRequest,
 )
-from backend.service import submit_complaint, transition_issue
+from backend.service import assign_issue_department, submit_complaint, transition_issue
 from backend.transitions import InvalidTransitionError
 
 # Load environment variables from .env before anything else (e.g. ai/client.py)
@@ -196,3 +211,134 @@ def read_issue_status_history(
             detail="Issue not found.",
         )
     return get_status_history(db, issue)
+
+
+@app.get(
+    "/api/departments",
+    response_model=list[DepartmentResponse],
+    status_code=status.HTTP_200_OK,
+    summary="List active departments in the controlled registry",
+)
+def list_departments(db: Session = Depends(get_db)) -> list[Department]:
+    """Return active departments only. Does not call Gemini. The registry
+    is not end-user-creatable here -- it's seeded once via Alembic."""
+    return get_active_departments(db)
+
+
+@app.post(
+    "/api/issues/{public_id}/assignment",
+    response_model=IssueResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Officially assign (or reassign) a civic issue to a department",
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Issue or department not found."},
+        status.HTTP_400_BAD_REQUEST: {
+            "description": (
+                "Department is inactive, or the issue's current status "
+                "doesn't permit assignment."
+            )
+        },
+    },
+)
+def assign_issue(
+    public_id: str, request: AssignmentRequest, db: Session = Depends(get_db)
+) -> Issue:
+    """Assign an issue to an official Department from the registry.
+
+    This is always an explicit authorized action -- it is never derived
+    from the AI's suggested_department. If the issue is CLASSIFIED, this
+    also transitions it to ROUTED (via the existing centralized transition
+    system); ROUTED-or-later issues are reassignable without altering
+    their status. Transition rules, assignment eligibility, and
+    persistence live in backend/transitions.py, backend/assignment_rules.py,
+    and backend/repository.py; this route only translates known failure
+    modes into HTTP responses. Does not call Gemini.
+    """
+    try:
+        issue = assign_issue_department(db, public_id, request.department_code, request.reason)
+    except DepartmentNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from None
+    except DepartmentInactiveError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from None
+    except AssignmentNotAllowedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from None
+    except SQLAlchemyError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to assign the issue. Please try again.",
+        ) from None
+
+    if issue is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Issue not found.",
+        )
+    return issue
+
+
+@app.get(
+    "/api/issues/{public_id}/assignment",
+    response_model=AssignmentResponse | None,
+    status_code=status.HTTP_200_OK,
+    summary="Get the current official department assignment for an issue",
+    responses={status.HTTP_404_NOT_FOUND: {"description": "Issue not found."}},
+)
+def read_current_assignment(public_id: str, db: Session = Depends(get_db)):
+    """Return the current assignment, or a bare `200` with JSON `null` if
+    the issue exists but has never been assigned -- that's a normal,
+    expected state, not an error. 404 only if the issue itself doesn't
+    exist. Does not call Gemini."""
+    issue = get_issue_by_public_id(db, public_id)
+    if issue is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Issue not found.",
+        )
+    current = get_current_assignment(db, issue)
+    if current is None:
+        return None
+    return AssignmentResponse(
+        code=current.department.code,
+        name=current.department.name,
+        assigned_at=current.assigned_at,
+        reason=current.reason,
+    )
+
+
+@app.get(
+    "/api/issues/{public_id}/assignment/history",
+    response_model=list[AssignmentHistoryEntryResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Get the full official assignment history for an issue",
+    responses={status.HTTP_404_NOT_FOUND: {"description": "Issue not found."}},
+)
+def read_assignment_history(
+    public_id: str, db: Session = Depends(get_db)
+) -> list[AssignmentHistoryEntryResponse]:
+    """Return all assignment history entries, oldest first. Does not call
+    Gemini."""
+    issue = get_issue_by_public_id(db, public_id)
+    if issue is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Issue not found.",
+        )
+    return [
+        AssignmentHistoryEntryResponse(
+            department_code=entry.department.code,
+            department_name=entry.department.name,
+            assigned_at=entry.assigned_at,
+            unassigned_at=entry.unassigned_at,
+            reason=entry.reason,
+        )
+        for entry in get_assignment_history(db, issue)
+    ]
