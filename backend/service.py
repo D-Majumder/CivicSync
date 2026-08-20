@@ -23,8 +23,10 @@ from backend.repository import (
     create_issue_from_civic_issue,
     get_department_by_code,
     get_issue_by_public_id,
+    get_status_history,
     transition_issue_status,
 )
+from backend.schemas import DepartmentSummary, PublicIssueTrackingResponse, PublicTimelineEntry
 
 
 def submit_complaint(db: Session, text: str) -> Issue:
@@ -97,3 +99,57 @@ def assign_issue_department(
     except SQLAlchemyError:
         db.rollback()
         raise
+
+
+def get_public_tracking(db: Session, public_id: str) -> PublicIssueTrackingResponse | None:
+    """Build the public, citizen-safe tracking representation for an Issue.
+
+    Returns None if no Issue matches public_id (route -> 404). Never calls
+    Gemini -- the issue is already analyzed and persisted, and this is a
+    pure read.
+
+    This is where the privacy boundary actually lives: the response is
+    built field-by-field from the Issue (and its status history), never by
+    handing the ORM object to a response_model with from_attributes=True
+    the way the internal/admin endpoints do. That means a future field
+    added to Issue can never silently leak into this public response --
+    someone has to deliberately add it here.
+    """
+    issue = get_issue_by_public_id(db, public_id)
+    if issue is None:
+        return None
+
+    # Citizen timeline: to_status/changed_at/reason only. from_status is
+    # never exposed, including the initial history row's from_status=None
+    # -- that row simply becomes a "SUBMITTED" timeline entry.
+    timeline = [
+        PublicTimelineEntry(
+            status=entry.to_status,
+            timestamp=entry.changed_at,
+            reason=entry.reason,
+        )
+        for entry in get_status_history(db, issue)
+    ]
+
+    assigned_department = None
+    if issue.assigned_department is not None:
+        assigned_department = DepartmentSummary(
+            code=issue.assigned_department.code,
+            name=issue.assigned_department.name,
+        )
+
+    return PublicIssueTrackingResponse(
+        public_id=issue.public_id,
+        category=issue.category,
+        problem=issue.problem,
+        location=issue.location,
+        duration=issue.duration,
+        affected_population=issue.affected_population,
+        severity=issue.severity,
+        status=issue.status,
+        status_label=issue.status.value.replace("_", " ").title(),
+        assigned_department=assigned_department,
+        created_at=issue.created_at,
+        updated_at=issue.updated_at,
+        timeline=timeline,
+    )

@@ -1,5 +1,5 @@
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Path, status
 from google.genai.errors import APIError
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -12,7 +12,7 @@ from backend.assignment_rules import (
     DepartmentNotFoundError,
 )
 from backend.database import get_db
-from backend.models import Department, Issue
+from backend.models import PUBLIC_ID_PATTERN, Department, Issue
 from backend.repository import (
     get_active_departments,
     get_assignment_history,
@@ -27,10 +27,16 @@ from backend.schemas import (
     AssignmentResponse,
     DepartmentResponse,
     IssueResponse,
+    PublicIssueTrackingResponse,
     StatusHistoryEntryResponse,
     StatusUpdateRequest,
 )
-from backend.service import assign_issue_department, submit_complaint, transition_issue
+from backend.service import (
+    assign_issue_department,
+    get_public_tracking,
+    submit_complaint,
+    transition_issue,
+)
 from backend.transitions import InvalidTransitionError
 
 # Load environment variables from .env before anything else (e.g. ai/client.py)
@@ -342,3 +348,46 @@ def read_assignment_history(
         )
         for entry in get_assignment_history(db, issue)
     ]
+
+
+@app.get(
+    "/api/track/{public_id}",
+    response_model=PublicIssueTrackingResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Track a civic issue",
+    description=(
+        "Public, unauthenticated endpoint for a citizen to track the status of "
+        "a previously submitted civic issue by its public id. Returns only "
+        "citizen-safe information -- internal database ids, AI confidence, the "
+        "raw AI department recommendation, and the original complaint text are "
+        "never exposed here. Read-only; never calls Gemini."
+    ),
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "No issue found with that public id."},
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
+            "description": "Malformed public id (expected format: CIV-<12 uppercase hex characters>)."
+        },
+    },
+)
+def track_issue(
+    public_id: str = Path(
+        ...,
+        pattern=PUBLIC_ID_PATTERN,
+        description="CivicSync public issue id, e.g. CIV-AFFDA97DDA53.",
+        examples=["CIV-AFFDA97DDA53"],
+    ),
+    db: Session = Depends(get_db),
+) -> PublicIssueTrackingResponse:
+    """Public citizen tracking. The public_id format is validated by the
+    path parameter's pattern above (422 on mismatch) *before* any database
+    query runs, so obviously malformed ids never reach the database.
+    Response construction (what's citizen-safe, timeline derivation) lives
+    in backend.service.get_public_tracking -- this route only handles the
+    404 case."""
+    tracking = get_public_tracking(db, public_id)
+    if tracking is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No issue found with that tracking id.",
+        )
+    return tracking

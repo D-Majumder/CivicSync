@@ -175,3 +175,49 @@ class AssignmentHistoryEntryResponse(BaseModel):
     assigned_at: datetime
     unassigned_at: datetime | None
     reason: str | None
+
+
+class PublicTimelineEntry(BaseModel):
+    """One citizen-facing timeline entry, derived from a status-history row.
+
+    Deliberately narrower than StatusHistoryEntryResponse (the internal/
+    admin representation): from_status is omitted entirely -- citizens see
+    what state the issue reached and when, not the raw before/after pair
+    (and the initial history row's from_status is null anyway, which we
+    never expose). `status` here is the row's to_status.
+    """
+
+    status: IssueStatus
+    timestamp: datetime
+    reason: str | None
+
+
+class PublicIssueTrackingResponse(BaseModel):
+    """Public, citizen-safe tracking representation for
+    GET /api/track/{public_id}.
+
+    Deliberately a distinct model from IssueResponse, not a trimmed-down
+    reuse of it: IssueResponse is the internal/admin representation and
+    includes original_text, confidence, suggested_department, and
+    resolution_summary -- none of which belong on an unauthenticated
+    public endpoint. This model is always built explicitly (see
+    backend.service.get_public_tracking), never populated directly from
+    an Issue ORM instance via from_attributes, so a future addition to
+    Issue can never silently leak through here.
+    """
+
+    public_id: str
+    category: IssueCategory
+    problem: str
+    location: str | None
+    duration: str | None
+    affected_population: str | None
+    severity: SeverityLevel
+    status: IssueStatus
+    # Citizen-friendly label alongside the machine-readable status (e.g.
+    # "In Progress" for IN_PROGRESS) -- IssueStatus itself is unchanged.
+    status_label: str
+    assigned_department: DepartmentSummary | None
+    created_at: datetime
+    updated_at: datetime
+    timeline: list[PublicTimelineEntry]

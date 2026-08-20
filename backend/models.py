@@ -43,6 +43,13 @@ class IssueStatus(str, enum.Enum):
     REOPENED = "REOPENED"
 
 
+# Regex for CivicSync's current public_id format: "CIV-" + 12 uppercase hex
+# characters (see generate_public_id() below). Defined once here so any
+# route needing to validate a public_id path parameter (e.g. the public
+# tracking endpoint) reuses this instead of duplicating the pattern.
+PUBLIC_ID_PATTERN = r"^CIV-[0-9A-F]{12}$"
+
+
 def generate_public_id() -> str:
     """Generate a unique, public-facing identifier for a new issue.
 
@@ -53,6 +60,7 @@ def generate_public_id() -> str:
     sequence table or DB sequence), which is out of scope for this initial
     persistence layer and can replace this function later without
     affecting anything that only depends on public_id being unique.
+    Must stay in sync with PUBLIC_ID_PATTERN above.
     """
     return f"CIV-{uuid.uuid4().hex[:12].upper()}"
 
