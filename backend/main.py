@@ -25,6 +25,7 @@ from backend.repository import (
 from backend.schemas import (
     AdminIssueDetailResponse,
     AdminIssueListResponse,
+    AgingBucketsResponse,
     AnalyzeRequest,
     AssignmentHistoryEntryResponse,
     AssignmentRequest,
@@ -32,17 +33,28 @@ from backend.schemas import (
     DashboardSummaryResponse,
     DepartmentResponse,
     DepartmentSummaryResponse,
+    DepartmentWorkloadResponse,
+    FunnelResponse,
     IssueResponse,
     PublicIssueTrackingResponse,
+    RecentActivityResponse,
+    ResolutionTimingResponse,
+    SeverityDistributionResponse,
     StatusHistoryEntryResponse,
     StatusUpdateRequest,
 )
 from backend.service import (
     assign_issue_department,
     get_admin_issue_detail,
+    get_aging_buckets,
     get_dashboard_summary,
     get_department_summary,
+    get_department_workload_summary,
     get_public_tracking,
+    get_recent_activity_feed,
+    get_resolution_timing,
+    get_severity_distribution,
+    get_status_funnel,
     list_admin_issues,
     list_operational_queue,
     list_stale_issues,
@@ -600,3 +612,113 @@ def read_operational_queue(
     return list_operational_queue(
         db, department_code=department_code, severity=severity, limit=limit, offset=offset
     )
+
+
+# ============================================================================
+# Civic Intelligence & Analytics (Milestone 9) -- INTERNAL/AUTHORITY, NOT
+# PUBLIC. Same caveat as the rest of the Authority Operations API above:
+# NOT authenticated yet. Every route below is read-only and never calls
+# Gemini.
+# ============================================================================
+
+
+@app.get(
+    "/api/admin/analytics/funnel",
+    response_model=FunnelResponse,
+    status_code=status.HTTP_200_OK,
+    summary="[INTERNAL/AUTHORITY] Status funnel",
+    description=(
+        "INTERNAL AUTHORITY API -- not authenticated yet. Dashboard-ready "
+        "status funnel: every IssueStatus in lifecycle-declaration order "
+        "with its current count. Backed by the same SQL GROUP BY query as "
+        "GET /api/admin/dashboard/summary's by_status -- this endpoint just "
+        "presents it as an ordered list for a funnel chart. Never calls "
+        "Gemini."
+    ),
+)
+def read_status_funnel(db: Session = Depends(get_db)) -> FunnelResponse:
+    return get_status_funnel(db)
+
+
+@app.get(
+    "/api/admin/analytics/severity-distribution",
+    response_model=SeverityDistributionResponse,
+    status_code=status.HTTP_200_OK,
+    summary="[INTERNAL/AUTHORITY] Severity distribution",
+    description=(
+        "INTERNAL AUTHORITY API -- not authenticated yet. Severity "
+        "breakdown with percentages, using the existing SeverityLevel "
+        "enum only (no second severity vocabulary). Never calls Gemini."
+    ),
+)
+def read_severity_distribution(db: Session = Depends(get_db)) -> SeverityDistributionResponse:
+    return get_severity_distribution(db)
+
+
+@app.get(
+    "/api/admin/analytics/department-workload",
+    response_model=DepartmentWorkloadResponse,
+    status_code=status.HTTP_200_OK,
+    summary="[INTERNAL/AUTHORITY] Department workload",
+    description=(
+        "INTERNAL AUTHORITY API -- not authenticated yet. Status breakdown "
+        "and active/resolved/closed rollup for EVERY active department in "
+        "one call, based on the OFFICIAL assigned department (never "
+        "suggested_department). One SQL query for all departments -- "
+        "no N+1. Never calls Gemini."
+    ),
+)
+def read_department_workload(db: Session = Depends(get_db)) -> DepartmentWorkloadResponse:
+    return get_department_workload_summary(db)
+
+
+@app.get(
+    "/api/admin/analytics/aging",
+    response_model=AgingBucketsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="[INTERNAL/AUTHORITY] Issue aging buckets",
+    description=(
+        "INTERNAL AUTHORITY API -- not authenticated yet. Age-since-"
+        "created_at distribution for currently ACTIVE issues (excludes "
+        "CLOSED/REJECTED). Plain, neutral duration buckets computed in SQL "
+        "-- not SLA targets; no bucket implies an issue is 'on time' or "
+        "'overdue'. Never calls Gemini."
+    ),
+)
+def read_aging_buckets(db: Session = Depends(get_db)) -> AgingBucketsResponse:
+    return get_aging_buckets(db)
+
+
+@app.get(
+    "/api/admin/analytics/resolution-timing",
+    response_model=ResolutionTimingResponse,
+    status_code=status.HTTP_200_OK,
+    summary="[INTERNAL/AUTHORITY] Resolution/closure timing",
+    description=(
+        "INTERNAL AUTHORITY API -- not authenticated yet. Average time to "
+        "resolve and to close, computed only over issues that actually "
+        "have the relevant timestamp(s) -- an average is null (never a "
+        "misleading 0) if no issue has reached that stage yet. Never calls "
+        "Gemini."
+    ),
+)
+def read_resolution_timing(db: Session = Depends(get_db)) -> ResolutionTimingResponse:
+    return get_resolution_timing(db)
+
+
+@app.get(
+    "/api/admin/analytics/recent-activity",
+    response_model=RecentActivityResponse,
+    status_code=status.HTTP_200_OK,
+    summary="[INTERNAL/AUTHORITY] Recent civic activity feed",
+    description=(
+        "INTERNAL AUTHORITY API -- not authenticated yet. Most recent "
+        "status-transition events across ALL issues, newest first -- a "
+        "single JOIN query, not one lookup per event. Never calls Gemini."
+    ),
+)
+def read_recent_activity(
+    limit: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+) -> RecentActivityResponse:
+    return get_recent_activity_feed(db, limit=limit)

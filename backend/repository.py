@@ -459,3 +459,145 @@ def get_stale_issues(
     total = query.count()
     items = query.order_by(Issue.updated_at.asc()).limit(limit).offset(offset).all()
     return items, total
+
+
+# --- Civic Intelligence & Analytics (Milestone 9) ----------------------------
+#
+# All read-only. All aggregation happens in SQL (GROUP BY / AVG / a single
+# CASE-bucketed GROUP BY) -- never by pulling every Issue into Python and
+# counting/averaging there. Reuses count_issues_by_status/severity from
+# Milestone 8 rather than duplicating those queries (see backend/service.py).
+
+# Aging is computed from julianday('now') - julianday(created_at) directly
+# in SQL. Verified against this project's actual stored datetime format
+# (naive UTC, matching how the rest of the app already writes timestamps --
+# see get_stale_issues' docstring above for the same caveat) to produce
+# correct day-granularity buckets. Boundaries are plain, neutral duration
+# buckets -- not SLA targets; no bucket implies "on time" or "overdue".
+_AGING_BUCKET_LABELS: tuple[str, ...] = (
+    "0-1 day",
+    "1-3 days",
+    "3-7 days",
+    "7-14 days",
+    "14-30 days",
+    "30+ days",
+)
+
+
+def _aging_bucket_expr():
+    age_days = func.julianday("now") - func.julianday(Issue.created_at)
+    return case(
+        (age_days < 1, _AGING_BUCKET_LABELS[0]),
+        (age_days < 3, _AGING_BUCKET_LABELS[1]),
+        (age_days < 7, _AGING_BUCKET_LABELS[2]),
+        (age_days < 14, _AGING_BUCKET_LABELS[3]),
+        (age_days < 30, _AGING_BUCKET_LABELS[4]),
+        else_=_AGING_BUCKET_LABELS[5],
+    )
+
+
+def get_issue_aging_buckets(db: Session) -> dict[str, int]:
+    """Age-since-created_at distribution for currently ACTIVE issues only
+    (excludes CLOSED/REJECTED -- a closed issue is no longer aging
+    backlog). One GROUP BY query; every bucket label is present,
+    zero-filled if empty, in a fixed deterministic order.
+    """
+    bucket = _aging_bucket_expr()
+    counts: dict[str, int] = {label: 0 for label in _AGING_BUCKET_LABELS}
+    rows = (
+        db.query(bucket, func.count(Issue.id))
+        .filter(Issue.status.notin_(TERMINAL_STATUSES))
+        .group_by(bucket)
+        .all()
+    )
+    for label, count in rows:
+        counts[label] = count
+    return counts
+
+
+def get_resolution_timing_metrics(db: Session) -> dict:
+    """Resolution/closure timing metrics.
+
+    Each average is computed ONLY over issues where the relevant
+    timestamp(s) are actually present -- e.g. avg_time_to_resolve_hours
+    averages over issues with a non-null resolved_at, and is None (never
+    0) if no issue has ever been resolved. SQL's AVG() already ignores
+    NULL inputs, so an issue missing resolved_at simply doesn't
+    contribute to that average rather than skewing it toward zero. All
+    three metrics are single SQL AVG(julianday(...) - julianday(...))
+    aggregates -- no rows are pulled into Python for this calculation.
+    """
+    resolved_count, avg_resolve_hours = (
+        db.query(
+            func.count(Issue.id),
+            func.avg(func.julianday(Issue.resolved_at) - func.julianday(Issue.created_at)) * 24,
+        )
+        .filter(Issue.resolved_at.isnot(None))
+        .one()
+    )
+    closed_count, avg_close_after_resolution_hours, avg_close_from_creation_hours = (
+        db.query(
+            func.count(Issue.id),
+            func.avg(func.julianday(Issue.closed_at) - func.julianday(Issue.resolved_at)) * 24,
+            func.avg(func.julianday(Issue.closed_at) - func.julianday(Issue.created_at)) * 24,
+        )
+        .filter(Issue.closed_at.isnot(None))
+        .one()
+    )
+    return {
+        "resolved_issue_count": resolved_count,
+        "avg_time_to_resolve_hours": avg_resolve_hours,
+        "closed_issue_count": closed_count,
+        "avg_time_to_close_after_resolution_hours": avg_close_after_resolution_hours,
+        "avg_time_to_close_from_creation_hours": avg_close_from_creation_hours,
+    }
+
+
+def get_department_workload(db: Session) -> list[tuple[Department, dict[IssueStatus, int]]]:
+    """Per-department status breakdown for EVERY active department, in a
+    single query -- avoids the N+1 that would result from calling
+    get_department_issue_counts() once per department to build the same
+    picture. Every department gets every IssueStatus zero-filled, even
+    departments with zero currently-assigned issues. Returned in
+    Department.code order.
+    """
+    rows = (
+        db.query(Department, Issue.status, func.count(Issue.id))
+        .outerjoin(Issue, Issue.assigned_department_id == Department.id)
+        .filter(Department.is_active.is_(True))
+        .group_by(Department.id, Issue.status)
+        .order_by(Department.code)
+        .all()
+    )
+
+    by_department: dict[int, dict[IssueStatus, int]] = {}
+    departments_by_id: dict[int, Department] = {}
+    order: list[int] = []
+
+    for department, status_value, count in rows:
+        if department.id not in by_department:
+            by_department[department.id] = {s: 0 for s in IssueStatus}
+            departments_by_id[department.id] = department
+            order.append(department.id)
+        if status_value is not None:
+            # None only occurs for a department with zero issues, via the
+            # outer join -- nothing to record for that placeholder row.
+            by_department[department.id][status_value] = count
+
+    return [(departments_by_id[dept_id], by_department[dept_id]) for dept_id in order]
+
+
+def get_recent_activity(db: Session, limit: int = 20) -> list[tuple[IssueStatusHistory, Issue]]:
+    """Most recent status-transition events system-wide, newest first.
+
+    A single JOIN query -- Issue.public_id/category come from the join
+    itself, not a per-row lookup, so this stays one query regardless of
+    `limit`.
+    """
+    return (
+        db.query(IssueStatusHistory, Issue)
+        .join(Issue, IssueStatusHistory.issue_id == Issue.id)
+        .order_by(IssueStatusHistory.changed_at.desc(), IssueStatusHistory.id.desc())
+        .limit(limit)
+        .all()
+    )

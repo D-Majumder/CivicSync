@@ -358,3 +358,104 @@ class DepartmentSummaryResponse(BaseModel):
     active_issues: int
     resolved_issues: int
     closed_issues: int
+
+
+# --- Civic Intelligence & Analytics (Milestone 9) ----------------------------
+#
+# Every model here is built explicitly in backend/service.py from
+# repository query results -- never from_attributes on an Issue ORM
+# object -- consistent with how the Milestone 8 admin/public models work.
+
+
+class FunnelStage(BaseModel):
+    """One stage of the status funnel, in lifecycle-declaration order."""
+
+    status: IssueStatus
+    status_label: str
+    count: int
+
+
+class FunnelResponse(BaseModel):
+    """Dashboard-ready status funnel for GET
+    /api/admin/analytics/funnel. Reuses the same per-status counts as
+    GET /api/admin/dashboard/summary (no duplicate query), presented as
+    an ordered list suitable for a funnel chart rather than a dict.
+    """
+
+    stages: list[FunnelStage]
+    total_issues: int
+
+
+class SeverityDistributionEntry(BaseModel):
+    severity: SeverityLevel
+    count: int
+    percentage: float
+
+
+class SeverityDistributionResponse(BaseModel):
+    """Severity breakdown with percentages, using the existing
+    SeverityLevel enum -- no second severity vocabulary."""
+
+    distribution: list[SeverityDistributionEntry]
+    total_issues: int
+
+
+class DepartmentWorkloadEntry(BaseModel):
+    """One department's current workload: status breakdown plus the
+    active/resolved/closed rollup (same terminal-status definition used
+    throughout the app: active = not CLOSED/REJECTED)."""
+
+    code: str
+    name: str
+    total_assigned: int
+    active_issues: int
+    resolved_issues: int
+    closed_issues: int
+    by_status: dict[IssueStatus, int]
+
+
+class DepartmentWorkloadResponse(BaseModel):
+    """Workload for every active department in one response -- avoids
+    needing one call per department to build this picture."""
+
+    departments: list[DepartmentWorkloadEntry]
+
+
+class AgingBucketEntry(BaseModel):
+    bucket: str
+    count: int
+
+
+class AgingBucketsResponse(BaseModel):
+    """Age-since-submission distribution for currently active issues.
+    Neutral duration buckets -- not an SLA judgment."""
+
+    buckets: list[AgingBucketEntry]
+    total_active_issues: int
+
+
+class ResolutionTimingResponse(BaseModel):
+    """Resolution/closure timing. Each average is null if no issue has
+    the relevant timestamp(s) yet, never a misleading 0."""
+
+    resolved_issue_count: int
+    avg_time_to_resolve_hours: float | None
+    closed_issue_count: int
+    avg_time_to_close_after_resolution_hours: float | None
+    avg_time_to_close_from_creation_hours: float | None
+
+
+class RecentActivityEntry(BaseModel):
+    """One system-wide status-transition event for the authority
+    dashboard's activity feed. Excludes internal history/issue ids."""
+
+    public_id: str
+    category: IssueCategory
+    from_status: IssueStatus | None
+    to_status: IssueStatus
+    reason: str | None
+    changed_at: datetime
+
+
+class RecentActivityResponse(BaseModel):
+    activities: list[RecentActivityEntry]

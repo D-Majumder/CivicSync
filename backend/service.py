@@ -20,6 +20,7 @@ from ai.schemas import IssueCategory, SeverityLevel
 from backend.assignment_rules import DepartmentInactiveError, DepartmentNotFoundError
 from backend.models import Department, Issue, IssueStatus
 from backend.repository import (
+    TERMINAL_STATUSES,
     assign_department_to_issue,
     count_issues_by_department,
     count_issues_by_severity,
@@ -28,8 +29,12 @@ from backend.repository import (
     get_assignment_history,
     get_department_by_code,
     get_department_issue_counts,
+    get_department_workload,
+    get_issue_aging_buckets,
     get_issue_by_public_id,
     get_operational_queue as repo_get_operational_queue,
+    get_recent_activity,
+    get_resolution_timing_metrics,
     get_stale_issues as repo_get_stale_issues,
     get_status_history,
     list_issues_for_admin,
@@ -41,12 +46,23 @@ from backend.schemas import (
     AdminIssueListItem,
     AdminIssueListResponse,
     AdminStatusHistoryEntry,
+    AgingBucketEntry,
+    AgingBucketsResponse,
     DashboardSummaryResponse,
     DepartmentIssueCount,
     DepartmentSummary,
     DepartmentSummaryResponse,
+    DepartmentWorkloadEntry,
+    DepartmentWorkloadResponse,
+    FunnelResponse,
+    FunnelStage,
     PublicIssueTrackingResponse,
     PublicTimelineEntry,
+    RecentActivityEntry,
+    RecentActivityResponse,
+    ResolutionTimingResponse,
+    SeverityDistributionEntry,
+    SeverityDistributionResponse,
 )
 
 
@@ -371,3 +387,90 @@ def list_stale_issues(
         limit=limit,
         offset=offset,
     )
+
+
+# --- Civic Intelligence & Analytics (Milestone 9) ----------------------------
+
+
+def get_status_funnel(db: Session) -> FunnelResponse:
+    """Dashboard-ready status funnel. Reuses count_issues_by_status()
+    (Milestone 8) rather than issuing a duplicate GROUP BY query -- only
+    the response shape differs (an ordered list for a funnel chart,
+    instead of a dict). Never calls Gemini."""
+    by_status = count_issues_by_status(db)
+    stages = [
+        FunnelStage(status=status_value, status_label=_status_label(status_value), count=count)
+        for status_value, count in by_status.items()
+    ]
+    return FunnelResponse(stages=stages, total_issues=sum(by_status.values()))
+
+
+def get_severity_distribution(db: Session) -> SeverityDistributionResponse:
+    """Severity breakdown with percentages. Reuses
+    count_issues_by_severity() (Milestone 8) -- no duplicate query. Uses
+    the existing SeverityLevel enum only. Never calls Gemini."""
+    by_severity = count_issues_by_severity(db)
+    total = sum(by_severity.values())
+    distribution = [
+        SeverityDistributionEntry(
+            severity=severity_value,
+            count=count,
+            percentage=round((count / total * 100) if total else 0.0, 2),
+        )
+        for severity_value, count in by_severity.items()
+    ]
+    return SeverityDistributionResponse(distribution=distribution, total_issues=total)
+
+
+def get_department_workload_summary(db: Session) -> DepartmentWorkloadResponse:
+    """Workload (status breakdown + active/resolved/closed rollup) for
+    every active department in one call. Based on the OFFICIAL assigned
+    department only, never suggested_department. Never calls Gemini."""
+    departments = [
+        DepartmentWorkloadEntry(
+            code=department.code,
+            name=department.name,
+            total_assigned=sum(by_status.values()),
+            active_issues=sum(
+                count for st, count in by_status.items() if st not in TERMINAL_STATUSES
+            ),
+            resolved_issues=by_status[IssueStatus.RESOLVED],
+            closed_issues=by_status[IssueStatus.CLOSED],
+            by_status=by_status,
+        )
+        for department, by_status in get_department_workload(db)
+    ]
+    return DepartmentWorkloadResponse(departments=departments)
+
+
+def get_aging_buckets(db: Session) -> AgingBucketsResponse:
+    """Age-since-submission distribution for currently active issues.
+    Neutral duration buckets, not SLA targets. Never calls Gemini."""
+    buckets = get_issue_aging_buckets(db)
+    return AgingBucketsResponse(
+        buckets=[AgingBucketEntry(bucket=label, count=count) for label, count in buckets.items()],
+        total_active_issues=sum(buckets.values()),
+    )
+
+
+def get_resolution_timing(db: Session) -> ResolutionTimingResponse:
+    """Resolution/closure timing metrics. Never calls Gemini."""
+    metrics = get_resolution_timing_metrics(db)
+    return ResolutionTimingResponse(**metrics)
+
+
+def get_recent_activity_feed(db: Session, limit: int = 20) -> RecentActivityResponse:
+    """Most recent status-transition events system-wide, newest first.
+    Never calls Gemini."""
+    activities = [
+        RecentActivityEntry(
+            public_id=issue.public_id,
+            category=issue.category,
+            from_status=history_entry.from_status,
+            to_status=history_entry.to_status,
+            reason=history_entry.reason,
+            changed_at=history_entry.changed_at,
+        )
+        for history_entry, issue in get_recent_activity(db, limit=limit)
+    ]
+    return RecentActivityResponse(activities=activities)
