@@ -221,3 +221,140 @@ class PublicIssueTrackingResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     timeline: list[PublicTimelineEntry]
+
+
+# --- Authority operations (Milestone 8) --------------------------------------
+#
+# These are deliberately separate from PublicIssueTrackingResponse and its
+# nested models -- the authority list/detail responses expose materially
+# more (original_text, confidence, suggested_department, full history)
+# than what's appropriate for the unauthenticated public tracking
+# endpoint. Every one of these is built explicitly in backend/service.py,
+# never populated from an Issue ORM instance via from_attributes, so a
+# future Issue column can't silently leak into an admin response either.
+
+
+class AdminIssueListItem(BaseModel):
+    """One row in an authority issue list (GET /api/admin/issues,
+    /api/admin/queue, /api/admin/issues/stale). More than the public
+    tracking endpoint exposes, but still never the internal integer id."""
+
+    public_id: str
+    category: IssueCategory
+    problem: str
+    severity: SeverityLevel
+    status: IssueStatus
+    status_label: str
+    assigned_department: DepartmentSummary | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class AdminIssueListResponse(BaseModel):
+    """Paginated list response shared by GET /api/admin/issues,
+    GET /api/admin/queue, and GET /api/admin/issues/stale -- all three are
+    "a filtered, paginated list of issues," just with different default
+    filters, so they share this one response shape."""
+
+    items: list[AdminIssueListItem]
+    total: int
+    limit: int
+    offset: int
+
+
+class AdminStatusHistoryEntry(BaseModel):
+    """Status-history row for the authority detail endpoint. Unlike the
+    public timeline, this keeps from_status (authorities see the full
+    before/after transition, not just the resulting state) -- but still
+    excludes the row's own id and issue_id."""
+
+    from_status: IssueStatus | None
+    to_status: IssueStatus
+    reason: str | None
+    changed_at: datetime
+
+
+class AdminAssignmentHistoryEntry(BaseModel):
+    """Assignment-history row for the authority detail endpoint. Excludes
+    the row's own id, issue_id, and department_id -- department identity
+    is exposed via department_code/department_name instead."""
+
+    department_code: str
+    department_name: str
+    assigned_at: datetime
+    unassigned_at: datetime | None
+    reason: str | None
+
+
+class AdminIssueDetailResponse(BaseModel):
+    """Full authority-facing detail for GET /api/admin/issues/{public_id}.
+
+    Exposes operational information the public tracking endpoint
+    deliberately withholds: original_text, confidence,
+    suggested_department, resolution_summary, and complete status/
+    assignment history. Still never exposes the internal integer id or
+    any history row's own id/issue_id/department_id.
+    """
+
+    public_id: str
+    original_text: str
+    category: IssueCategory
+    problem: str
+    location: str | None
+    duration: str | None
+    affected_population: str | None
+    suggested_department: str | None
+    confidence: float
+    severity: SeverityLevel
+    assigned_department: DepartmentSummary | None
+    status: IssueStatus
+    status_label: str
+    resolution_summary: str | None
+    created_at: datetime
+    updated_at: datetime
+    resolved_at: datetime | None
+    closed_at: datetime | None
+    status_history: list[AdminStatusHistoryEntry]
+    assignment_history: list[AdminAssignmentHistoryEntry]
+
+
+class DepartmentIssueCount(BaseModel):
+    """One row of GET /api/admin/dashboard/summary's by_department list."""
+
+    code: str
+    name: str
+    count: int
+
+
+class DashboardSummaryResponse(BaseModel):
+    """Aggregate operational counts for GET /api/admin/dashboard/summary.
+
+    by_status and by_severity always include every known enum value
+    (zero-filled), and by_department always includes every active
+    department (zero-filled) -- see backend/repository.py's
+    count_issues_by_status/severity/department, all SQL GROUP BY queries.
+    """
+
+    total_issues: int
+    by_status: dict[IssueStatus, int]
+    by_severity: dict[SeverityLevel, int]
+    by_department: list[DepartmentIssueCount]
+
+
+class DepartmentSummaryResponse(BaseModel):
+    """Per-department operational summary for
+    GET /api/admin/departments/{department_code}/summary.
+
+    All counts scope to issues CURRENTLY assigned to this department
+    (Issue.assigned_department), not historical assignments.
+    active_issues excludes the terminal statuses CLOSED and REJECTED.
+    """
+
+    code: str
+    name: str
+    total_assigned_issues: int
+    by_status: dict[IssueStatus, int]
+    by_severity: dict[SeverityLevel, int]
+    active_issues: int
+    resolved_issues: int
+    closed_issues: int

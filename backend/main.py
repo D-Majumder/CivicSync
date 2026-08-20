@@ -1,18 +1,20 @@
+from typing import Literal
+
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Path, status
+from fastapi import Depends, FastAPI, HTTPException, Path, Query, status
 from google.genai.errors import APIError
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from ai.client import analyze_complaint
-from ai.schemas import CivicIssue
+from ai.schemas import CivicIssue, IssueCategory, SeverityLevel
 from backend.assignment_rules import (
     AssignmentNotAllowedError,
     DepartmentInactiveError,
     DepartmentNotFoundError,
 )
 from backend.database import get_db
-from backend.models import PUBLIC_ID_PATTERN, Department, Issue
+from backend.models import PUBLIC_ID_PATTERN, Department, Issue, IssueStatus
 from backend.repository import (
     get_active_departments,
     get_assignment_history,
@@ -21,11 +23,15 @@ from backend.repository import (
     get_status_history,
 )
 from backend.schemas import (
+    AdminIssueDetailResponse,
+    AdminIssueListResponse,
     AnalyzeRequest,
     AssignmentHistoryEntryResponse,
     AssignmentRequest,
     AssignmentResponse,
+    DashboardSummaryResponse,
     DepartmentResponse,
+    DepartmentSummaryResponse,
     IssueResponse,
     PublicIssueTrackingResponse,
     StatusHistoryEntryResponse,
@@ -33,7 +39,13 @@ from backend.schemas import (
 )
 from backend.service import (
     assign_issue_department,
+    get_admin_issue_detail,
+    get_dashboard_summary,
+    get_department_summary,
     get_public_tracking,
+    list_admin_issues,
+    list_operational_queue,
+    list_stale_issues,
     submit_complaint,
     transition_issue,
 )
@@ -391,3 +403,200 @@ def track_issue(
             detail="No issue found with that tracking id.",
         )
     return tracking
+
+
+# ============================================================================
+# Authority Operations API (Milestone 8) -- INTERNAL/AUTHORITY, NOT PUBLIC.
+#
+# IMPORTANT: these routes are NOT authenticated yet. Authentication and
+# authorization will be added before any production deployment -- do not
+# treat these endpoints as secure, and do not expose them to untrusted
+# clients until that lands. Every route below is read-only and never calls
+# Gemini.
+# ============================================================================
+
+
+@app.get(
+    "/api/admin/issues",
+    response_model=AdminIssueListResponse,
+    status_code=status.HTTP_200_OK,
+    summary="[INTERNAL/AUTHORITY] List and filter civic issues",
+    description=(
+        "INTERNAL AUTHORITY API -- not authenticated yet; do not expose to "
+        "untrusted clients. Supplied filters (status, department, "
+        "severity, category) are ANDed together. department_code filters "
+        "by the OFFICIAL assigned department, never the AI's "
+        "suggested_department. Filtering, sorting, and pagination all "
+        "happen at the database level. Never calls Gemini."
+    ),
+)
+def list_admin_issues_route(
+    status_filter: IssueStatus | None = Query(
+        default=None, alias="status", description="Filter by exact lifecycle status."
+    ),
+    department_code: str | None = Query(
+        default=None,
+        description="Filter by the OFFICIAL assigned department code (not the AI suggestion).",
+    ),
+    severity: SeverityLevel | None = Query(default=None, description="Filter by severity."),
+    category: IssueCategory | None = Query(
+        default=None, description="Filter by AI-assigned category."
+    ),
+    sort_by: Literal["updated_at", "created_at", "severity"] = Query(
+        default="updated_at",
+        description=(
+            "Sort field. 'severity' sorts by an explicit priority ordering "
+            "(CRITICAL, HIGH, MEDIUM, LOW, UNKNOWN), not alphabetically."
+        ),
+    ),
+    sort_order: Literal["asc", "desc"] = Query(default="desc"),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+) -> AdminIssueListResponse:
+    return list_admin_issues(
+        db,
+        status=status_filter,
+        department_code=department_code,
+        severity=severity,
+        category=category,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@app.get(
+    "/api/admin/issues/stale",
+    response_model=AdminIssueListResponse,
+    status_code=status.HTTP_200_OK,
+    summary="[INTERNAL/AUTHORITY] List stale/aging issues",
+    description=(
+        "INTERNAL AUTHORITY API -- not authenticated yet. Returns issues "
+        "whose updated_at is at least older_than_hours old (default 48). "
+        "This is a simple 'now - updated_at >= older_than_hours' check, "
+        "not an SLA system. Registered before the /{public_id} detail "
+        "route below so 'stale' is never matched as a public_id. Read-only; "
+        "never mutates data; never calls Gemini."
+    ),
+)
+def list_stale_issues_route(
+    older_than_hours: int = Query(
+        default=48, ge=1, description="Minimum hours since the issue's last update."
+    ),
+    department_code: str | None = Query(
+        default=None, description="Filter by the official assigned department code."
+    ),
+    status_filter: IssueStatus | None = Query(
+        default=None, alias="status", description="Filter by exact lifecycle status."
+    ),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+) -> AdminIssueListResponse:
+    return list_stale_issues(
+        db,
+        older_than_hours=older_than_hours,
+        department_code=department_code,
+        status=status_filter,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@app.get(
+    "/api/admin/issues/{public_id}",
+    response_model=AdminIssueDetailResponse,
+    status_code=status.HTTP_200_OK,
+    summary="[INTERNAL/AUTHORITY] Full issue detail",
+    description=(
+        "INTERNAL AUTHORITY API -- not authenticated yet; do not expose to "
+        "untrusted clients. Exposes operational detail withheld from the "
+        "public tracking endpoint: original complaint text, AI confidence, "
+        "the AI's suggested_department, and complete status/assignment "
+        "history. Still never exposes internal database ids. Never calls "
+        "Gemini."
+    ),
+    responses={status.HTTP_404_NOT_FOUND: {"description": "No issue found with that public id."}},
+)
+def read_admin_issue_detail(public_id: str, db: Session = Depends(get_db)) -> AdminIssueDetailResponse:
+    detail = get_admin_issue_detail(db, public_id)
+    if detail is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Issue not found.",
+        )
+    return detail
+
+
+@app.get(
+    "/api/admin/dashboard/summary",
+    response_model=DashboardSummaryResponse,
+    status_code=status.HTTP_200_OK,
+    summary="[INTERNAL/AUTHORITY] Dashboard aggregate counts",
+    description=(
+        "INTERNAL AUTHORITY API -- not authenticated yet. All counts are "
+        "computed with SQL GROUP BY aggregation, never by loading every "
+        "issue into Python. by_status and by_severity include every known "
+        "enum value (zero-filled); by_department includes every active "
+        "department (zero-filled). Never calls Gemini."
+    ),
+)
+def read_dashboard_summary(db: Session = Depends(get_db)) -> DashboardSummaryResponse:
+    return get_dashboard_summary(db)
+
+
+@app.get(
+    "/api/admin/departments/{department_code}/summary",
+    response_model=DepartmentSummaryResponse,
+    status_code=status.HTTP_200_OK,
+    summary="[INTERNAL/AUTHORITY] Per-department operational summary",
+    description=(
+        "INTERNAL AUTHORITY API -- not authenticated yet. All counts scope "
+        "to issues CURRENTLY assigned to this department (not historical "
+        "assignments). active_issues excludes the terminal statuses CLOSED "
+        "and REJECTED, using the existing lifecycle semantics -- no new "
+        "status is introduced. Never calls Gemini."
+    ),
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "No department found with that code."}
+    },
+)
+def read_department_summary(
+    department_code: str, db: Session = Depends(get_db)
+) -> DepartmentSummaryResponse:
+    summary = get_department_summary(db, department_code)
+    if summary is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Department not found.",
+        )
+    return summary
+
+
+@app.get(
+    "/api/admin/queue",
+    response_model=AdminIssueListResponse,
+    status_code=status.HTTP_200_OK,
+    summary="[INTERNAL/AUTHORITY] Operational queue",
+    description=(
+        "INTERNAL AUTHORITY API -- not authenticated yet. Issues requiring "
+        "operational attention: every status except the terminal CLOSED "
+        "and REJECTED. Ordered by an explicit severity priority (CRITICAL, "
+        "HIGH, MEDIUM, LOW, UNKNOWN -- not alphabetical), then oldest "
+        "updated_at first, both computed in SQL. Never calls Gemini."
+    ),
+)
+def read_operational_queue(
+    department_code: str | None = Query(
+        default=None, description="Filter by the official assigned department code."
+    ),
+    severity: SeverityLevel | None = Query(default=None, description="Filter by severity."),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+) -> AdminIssueListResponse:
+    return list_operational_queue(
+        db, department_code=department_code, severity=severity, limit=limit, offset=offset
+    )

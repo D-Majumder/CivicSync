@@ -8,11 +8,12 @@ routes), consistent with CivicSync's API -> Service -> Database layering.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy.orm import Session
+from sqlalchemy import case, func
+from sqlalchemy.orm import Session, joinedload
 
-from ai.schemas import CivicIssue
+from ai.schemas import CivicIssue, IssueCategory, SeverityLevel
 from backend.assignment_rules import check_assignment_allowed
 from backend.models import (
     Department,
@@ -22,6 +23,29 @@ from backend.models import (
     IssueStatusHistory,
 )
 from backend.transitions import validate_transition
+
+# Terminal lifecycle states -- an issue in one of these is done, in either
+# direction (successfully closed, or rejected as not actionable). Reused
+# by the department summary's "active issues" calculation and the
+# operational queue's exclusion list below.
+TERMINAL_STATUSES: frozenset[IssueStatus] = frozenset({IssueStatus.CLOSED, IssueStatus.REJECTED})
+
+# Statuses that represent work still requiring operational attention --
+# everything except the terminal states above.
+OPERATIONAL_STATUSES: frozenset[IssueStatus] = frozenset(
+    s for s in IssueStatus if s not in TERMINAL_STATUSES
+)
+
+# Explicit, deterministic severity ordering for the operational queue --
+# NOT alphabetical. Lower number = higher priority (surfaced first).
+_SEVERITY_PRIORITY_CASE = case(
+    (Issue.severity == SeverityLevel.CRITICAL, 0),
+    (Issue.severity == SeverityLevel.HIGH, 1),
+    (Issue.severity == SeverityLevel.MEDIUM, 2),
+    (Issue.severity == SeverityLevel.LOW, 3),
+    (Issue.severity == SeverityLevel.UNKNOWN, 4),
+    else_=5,
+)
 
 
 def create_issue_from_civic_issue(db: Session, civic_issue: CivicIssue) -> Issue:
@@ -238,3 +262,200 @@ def assign_department_to_issue(
     db.commit()
     db.refresh(issue)
     return issue
+
+
+# --- Authority operations (Milestone 8) --------------------------------------
+#
+# Everything below is read-only and backs the internal authority/dashboard
+# API in backend/main.py. All filtering, sorting, pagination, and counting
+# happens in SQL -- never by loading the full issues table into Python.
+
+
+def list_issues_for_admin(
+    db: Session,
+    *,
+    status: IssueStatus | None = None,
+    department_code: str | None = None,
+    severity: SeverityLevel | None = None,
+    category: IssueCategory | None = None,
+    sort_by: str = "updated_at",
+    sort_order: str = "desc",
+    limit: int = 20,
+    offset: int = 0,
+) -> tuple[list[Issue], int]:
+    """Filtered, sorted, paginated issue list for GET /api/admin/issues.
+
+    Filters are ANDed together. department_code filters by the OFFICIAL
+    assigned department (Issue.assigned_department), never
+    suggested_department. Returns (items, total) where total is the count
+    matching the filters BEFORE limit/offset are applied.
+    """
+    query = db.query(Issue).options(joinedload(Issue.assigned_department))
+
+    if status is not None:
+        query = query.filter(Issue.status == status)
+    if department_code is not None:
+        # A correlated EXISTS rather than an explicit join, so this filter
+        # doesn't interact with the joinedload() above (which already adds
+        # its own join for eager-loading assigned_department).
+        query = query.filter(Issue.assigned_department.has(Department.code == department_code))
+    if severity is not None:
+        query = query.filter(Issue.severity == severity)
+    if category is not None:
+        query = query.filter(Issue.category == category)
+
+    # Count before pagination. Safe to count with joinedload() attached
+    # here because assigned_department is many-to-one -- the eager-load
+    # join can't multiply rows.
+    total = query.count()
+
+    sort_columns = {
+        "updated_at": Issue.updated_at,
+        "created_at": Issue.created_at,
+        "severity": _SEVERITY_PRIORITY_CASE,
+    }
+    sort_column = sort_columns.get(sort_by, Issue.updated_at)
+    query = query.order_by(sort_column.asc() if sort_order == "asc" else sort_column.desc())
+
+    items = query.limit(limit).offset(offset).all()
+    return items, total
+
+
+def count_issues_by_status(db: Session) -> dict[IssueStatus, int]:
+    """Issue counts grouped by status, via SQL GROUP BY. Every IssueStatus
+    is present in the result, zero-filled if no issues currently have it."""
+    counts: dict[IssueStatus, int] = {s: 0 for s in IssueStatus}
+    rows = db.query(Issue.status, func.count(Issue.id)).group_by(Issue.status).all()
+    for status_value, count in rows:
+        counts[status_value] = count
+    return counts
+
+
+def count_issues_by_severity(db: Session) -> dict[SeverityLevel, int]:
+    """Issue counts grouped by severity, via SQL GROUP BY. Every
+    SeverityLevel is present in the result, zero-filled if unused."""
+    counts: dict[SeverityLevel, int] = {s: 0 for s in SeverityLevel}
+    rows = db.query(Issue.severity, func.count(Issue.id)).group_by(Issue.severity).all()
+    for severity_value, count in rows:
+        counts[severity_value] = count
+    return counts
+
+
+def count_issues_by_department(db: Session) -> list[tuple[Department, int]]:
+    """Every active Department paired with its currently-assigned issue
+    count (0 if none), via a single LEFT JOIN + GROUP BY -- no N+1."""
+    return (
+        db.query(Department, func.count(Issue.id))
+        .outerjoin(Issue, Issue.assigned_department_id == Department.id)
+        .filter(Department.is_active.is_(True))
+        .group_by(Department.id)
+        .order_by(Department.code)
+        .all()
+    )
+
+
+def get_department_issue_counts(db: Session, department: Department) -> dict:
+    """Aggregate counts for a single department's currently-assigned
+    issues: total, by status, by severity, and active/resolved/closed.
+    All counts come from SQL GROUP BY; "active" is a small Python sum over
+    the resulting 9-status dict, not a scan of raw issue rows.
+    """
+    status_rows = (
+        db.query(Issue.status, func.count(Issue.id))
+        .filter(Issue.assigned_department_id == department.id)
+        .group_by(Issue.status)
+        .all()
+    )
+    by_status: dict[IssueStatus, int] = {s: 0 for s in IssueStatus}
+    for status_value, count in status_rows:
+        by_status[status_value] = count
+
+    severity_rows = (
+        db.query(Issue.severity, func.count(Issue.id))
+        .filter(Issue.assigned_department_id == department.id)
+        .group_by(Issue.severity)
+        .all()
+    )
+    by_severity: dict[SeverityLevel, int] = {s: 0 for s in SeverityLevel}
+    for severity_value, count in severity_rows:
+        by_severity[severity_value] = count
+
+    total = sum(by_status.values())
+    active = sum(count for st, count in by_status.items() if st not in TERMINAL_STATUSES)
+
+    return {
+        "total_assigned_issues": total,
+        "by_status": by_status,
+        "by_severity": by_severity,
+        "active_issues": active,
+        "resolved_issues": by_status[IssueStatus.RESOLVED],
+        "closed_issues": by_status[IssueStatus.CLOSED],
+    }
+
+
+def get_operational_queue(
+    db: Session,
+    *,
+    department_code: str | None = None,
+    severity: SeverityLevel | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> tuple[list[Issue], int]:
+    """Issues requiring operational attention (excludes CLOSED, REJECTED),
+    ordered by severity priority (CRITICAL first) then oldest updated_at
+    first -- both computed in SQL, not Python. Returns (items, total)."""
+    query = (
+        db.query(Issue)
+        .options(joinedload(Issue.assigned_department))
+        .filter(Issue.status.in_(OPERATIONAL_STATUSES))
+    )
+    if department_code is not None:
+        query = query.filter(Issue.assigned_department.has(Department.code == department_code))
+    if severity is not None:
+        query = query.filter(Issue.severity == severity)
+
+    total = query.count()
+    items = (
+        query.order_by(_SEVERITY_PRIORITY_CASE.asc(), Issue.updated_at.asc())
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
+    return items, total
+
+
+def get_stale_issues(
+    db: Session,
+    *,
+    older_than_hours: int = 48,
+    department_code: str | None = None,
+    status: IssueStatus | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> tuple[list[Issue], int]:
+    """Issues whose updated_at is at least older_than_hours old. Read-only
+    -- never mutates anything. Returns (items, total), oldest-updated first.
+
+    Issue.updated_at is stored as a naive UTC datetime (SQLite's DATETIME
+    columns don't persist a timezone offset), so the cutoff below is
+    computed in UTC and then made naive to compare correctly -- comparing
+    a naive column against an aware datetime would either raise or compare
+    incorrectly depending on the DB-API driver.
+    """
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=older_than_hours)).replace(
+        tzinfo=None
+    )
+
+    query = (
+        db.query(Issue)
+        .options(joinedload(Issue.assigned_department))
+        .filter(Issue.updated_at <= cutoff)
+    )
+    if department_code is not None:
+        query = query.filter(Issue.assigned_department.has(Department.code == department_code))
+    if status is not None:
+        query = query.filter(Issue.status == status)
+
+    total = query.count()
+    items = query.order_by(Issue.updated_at.asc()).limit(limit).offset(offset).all()
+    return items, total
