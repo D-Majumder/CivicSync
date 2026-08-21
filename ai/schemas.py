@@ -179,3 +179,51 @@ class InsightPrioritizationOutput(BaseModel):
             "not any information beyond what was provided."
         ),
     )
+
+
+class IssueExplanationOutput(BaseModel):
+    """Gemini-facing structured output for Milestone 14's on-demand
+    "Explain with AI" authority capability.
+
+    A separate, narrow capability from CivicIssue/GeminiCivicIssueSchema
+    (which extract structured data from a NEW citizen complaint) and from
+    InsightPrioritizationOutput above (which reasons about aggregate
+    insights) -- this one reasons about a SINGLE, already-extracted and
+    already-persisted issue's structured fields, on demand, at an
+    authority's request. Reuses the same Gemini client/model plumbing
+    (ai/client.py's _get_client(), GEMINI_MODEL) rather than standing up
+    a second AI client.
+
+    extra="ignore" for the same reason as the other Gemini-facing output
+    schemas in this module: Gemini's structured-output API rejects the
+    additionalProperties JSON Schema keyword that extra="forbid" would
+    otherwise render.
+
+    Strictly advisory and explanatory: Gemini is asked to explain why the
+    EXISTING classification/severity/department suggestion makes sense,
+    never to propose changing them. Nothing built on this output is ever
+    persisted or allowed to mutate an Issue -- see
+    backend/service.py's get_issue_ai_explanation.
+    """
+
+    model_config = {"extra": "ignore"}
+
+    explanation: str = Field(
+        ...,
+        description=(
+            "A concise (2-4 sentence) authority-facing explanation covering "
+            "what the complaint is about, why the existing severity/category "
+            "classification appears reasonable, and why the suggested/"
+            "assigned department fits -- grounded ONLY in the structured "
+            "fields provided, never inventing new facts."
+        ),
+    )
+    considerations: list[str] = Field(
+        default_factory=list,
+        description=(
+            "0-4 short (under ~12 words each) operational factors an "
+            "authority should weigh before acting -- not new facts, just "
+            "framing drawn from the provided fields (e.g. affected "
+            "population, duration, severity)."
+        ),
+    )

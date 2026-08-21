@@ -15,12 +15,19 @@ from google import genai
 from google.genai import types
 
 from ai.prompts import (
+    EXPLANATION_SYSTEM_PROMPT,
     PRIORITIZATION_SYSTEM_PROMPT,
     SYSTEM_PROMPT,
+    build_explanation_prompt,
     build_prioritization_prompt,
     build_user_prompt,
 )
-from ai.schemas import CivicIssue, GeminiCivicIssueSchema, InsightPrioritizationOutput
+from ai.schemas import (
+    CivicIssue,
+    GeminiCivicIssueSchema,
+    InsightPrioritizationOutput,
+    IssueExplanationOutput,
+)
 
 # Current working Gemini model for this project. Do not change without
 # team agreement (see README.md "AI assistants must not independently
@@ -154,3 +161,59 @@ def generate_insight_prioritization(insights: list[dict]) -> InsightPrioritizati
         raise ValueError("Gemini returned an empty response.")
 
     return InsightPrioritizationOutput.model_validate_json(response.text)
+
+
+def generate_issue_explanation(issue_context: dict) -> IssueExplanationOutput:
+    """Ask Gemini for a short, grounded, authority-facing explanation of
+    a single already-extracted, already-persisted issue's existing
+    classification.
+
+    A separate capability from analyze_complaint() (new-complaint
+    extraction) and generate_insight_prioritization() (aggregate-insight
+    reasoning) above, but deliberately reuses the same client plumbing
+    (_get_client(), GEMINI_MODEL) rather than standing up a second AI
+    client.
+
+    `issue_context` must contain only the issue's already-extracted
+    structured fields (category, problem, location, duration,
+    affected_population, severity, confidence, suggested_department,
+    assigned_department, status_label) -- never the raw original_text or
+    public_id. Gemini's role is strictly advisory and explanatory: it
+    never changes any Issue, assignment, or status (see
+    EXPLANATION_SYSTEM_PROMPT).
+
+    Args:
+        issue_context: A plain dict of the issue's structured fields.
+
+    Returns:
+        A validated IssueExplanationOutput instance.
+
+    Raises:
+        ValueError: if issue_context is empty, or Gemini returns an
+            empty response.
+        EnvironmentError: if GEMINI_API_KEY is not configured.
+    """
+    if not issue_context:
+        raise ValueError("issue_context must not be empty.")
+
+    client = _get_client()
+
+    response = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=build_explanation_prompt(issue_context),
+        config=types.GenerateContentConfig(
+            system_instruction=EXPLANATION_SYSTEM_PROMPT,
+            response_mime_type="application/json",
+            response_schema=IssueExplanationOutput,
+            temperature=0.1,
+        ),
+    )
+
+    parsed = getattr(response, "parsed", None)
+    if isinstance(parsed, IssueExplanationOutput):
+        return parsed
+
+    if not response.text:
+        raise ValueError("Gemini returned an empty response.")
+
+    return IssueExplanationOutput.model_validate_json(response.text)

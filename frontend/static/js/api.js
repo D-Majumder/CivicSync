@@ -145,9 +145,11 @@ const CivicSyncApi = {
     return request(`/api/jurisdictions${toQueryString(filters)}`, { method: 'GET' });
   },
 
-  /** Real aggregate counts (by_status/by_severity/by_department). */
-  getDashboardSummary() {
-    return request('/api/admin/dashboard/summary', { method: 'GET' });
+  /** Real aggregate counts (by_status/by_severity/by_department).
+   * filters may include jurisdiction_code to scope by_status/by_severity/
+   * total_issues to that jurisdiction's subtree. */
+  getDashboardSummary(filters) {
+    return request(`/api/admin/dashboard/summary${toQueryString(filters)}`, { method: 'GET' });
   },
 
   // --- Milestone 12: Authority Command Center ---------------------------------
@@ -220,6 +222,18 @@ const CivicSyncApi = {
   /** AI-assisted prioritization over the same grounded insights (advisory only). */
   prioritizeInsights() {
     return request('/api/admin/insights/prioritize', { method: 'POST' });
+  },
+
+  /**
+   * On-demand AI explanation of a single issue's existing classification
+   * (Milestone 14). Advisory/explanatory only -- never changes the issue.
+   * Never persisted: a fresh call to Gemini every time, nothing cached
+   * server-side.
+   */
+  explainIssue(publicId) {
+    return request(`/api/admin/issues/${encodeURIComponent(publicId)}/explain`, {
+      method: 'POST',
+    });
   },
 
   /**

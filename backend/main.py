@@ -40,6 +40,7 @@ from backend.schemas import (
     DepartmentWorkloadResponse,
     FunnelResponse,
     InsightsResponse,
+    IssueExplanationResponse,
     IssueResponse,
     JurisdictionListResponse,
     JurisdictionResponse,
@@ -59,6 +60,7 @@ from backend.service import (
     get_dashboard_summary,
     get_department_summary,
     get_department_workload_summary,
+    get_issue_ai_explanation,
     get_jurisdiction_detail,
     get_jurisdictions,
     get_prioritized_insights,
@@ -480,6 +482,14 @@ def list_admin_issues_route(
     category: IssueCategory | None = Query(
         default=None, description="Filter by AI-assigned category."
     ),
+    jurisdiction_code: str | None = Query(
+        default=None,
+        description=(
+            "Filter to issues whose assigned department falls under this "
+            "jurisdiction OR any of its descendants (e.g. a DISTRICT code "
+            "includes every LOCAL_BODY beneath it)."
+        ),
+    ),
     sort_by: Literal["updated_at", "created_at", "severity"] = Query(
         default="updated_at",
         description=(
@@ -492,17 +502,23 @@ def list_admin_issues_route(
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ) -> AdminIssueListResponse:
-    return list_admin_issues(
+    result = list_admin_issues(
         db,
         status=status_filter,
         department_code=department_code,
         severity=severity,
         category=category,
+        jurisdiction_code=jurisdiction_code,
         sort_by=sort_by,
         sort_order=sort_order,
         limit=limit,
         offset=offset,
     )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Jurisdiction not found."
+        )
+    return result
 
 
 @app.get(
@@ -529,18 +545,28 @@ def list_stale_issues_route(
     status_filter: IssueStatus | None = Query(
         default=None, alias="status", description="Filter by exact lifecycle status."
     ),
+    jurisdiction_code: str | None = Query(
+        default=None,
+        description="Filter to issues under this jurisdiction OR any of its descendants.",
+    ),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ) -> AdminIssueListResponse:
-    return list_stale_issues(
+    result = list_stale_issues(
         db,
         older_than_hours=older_than_hours,
         department_code=department_code,
         status=status_filter,
+        jurisdiction_code=jurisdiction_code,
         limit=limit,
         offset=offset,
     )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Jurisdiction not found."
+        )
+    return result
 
 
 @app.get(
@@ -581,8 +607,23 @@ def read_admin_issue_detail(public_id: str, db: Session = Depends(get_db)) -> Ad
         "department (zero-filled). Never calls Gemini."
     ),
 )
-def read_dashboard_summary(db: Session = Depends(get_db)) -> DashboardSummaryResponse:
-    return get_dashboard_summary(db)
+def read_dashboard_summary(
+    jurisdiction_code: str | None = Query(
+        default=None,
+        description=(
+            "Scope by_status/by_severity/total_issues to this jurisdiction "
+            "OR any of its descendants. by_department is always the full "
+            "active-department list regardless of scoping."
+        ),
+    ),
+    db: Session = Depends(get_db),
+) -> DashboardSummaryResponse:
+    summary = get_dashboard_summary(db, jurisdiction_code=jurisdiction_code)
+    if summary is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Jurisdiction not found."
+        )
+    return summary
 
 
 @app.get(
@@ -631,13 +672,27 @@ def read_operational_queue(
         default=None, description="Filter by the official assigned department code."
     ),
     severity: SeverityLevel | None = Query(default=None, description="Filter by severity."),
+    jurisdiction_code: str | None = Query(
+        default=None,
+        description="Filter to issues under this jurisdiction OR any of its descendants.",
+    ),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ) -> AdminIssueListResponse:
-    return list_operational_queue(
-        db, department_code=department_code, severity=severity, limit=limit, offset=offset
+    result = list_operational_queue(
+        db,
+        department_code=department_code,
+        severity=severity,
+        jurisdiction_code=jurisdiction_code,
+        limit=limit,
+        offset=offset,
     )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Jurisdiction not found."
+        )
+    return result
 
 
 # ============================================================================
@@ -809,6 +864,53 @@ def read_civic_insights(db: Session = Depends(get_db)) -> InsightsResponse:
 )
 def prioritize_civic_insights(db: Session = Depends(get_db)) -> PrioritizedInsightsResponse:
     return get_prioritized_insights(db)
+
+
+# ============================================================================
+# On-demand AI issue explanation (Milestone 14, Priority 2) -- INTERNAL/
+# AUTHORITY, NOT PUBLIC. Same caveat as the rest of this API: NOT
+# authenticated yet.
+#
+# AI SAFETY BOUNDARY: same discipline as POST /api/admin/insights/prioritize
+# above. Gemini's role here is strictly advisory/explanatory -- it explains
+# why an issue's EXISTING classification/department make sense, and never
+# changes any Issue, assignment, or status. Nothing here is persisted; the
+# explanation is generated fresh on every call and discarded once returned.
+# See ai/prompts.py's EXPLANATION_SYSTEM_PROMPT and backend/service.py's
+# get_issue_ai_explanation() for the enforced boundary.
+# ============================================================================
+
+
+@app.post(
+    "/api/admin/issues/{public_id}/explain",
+    response_model=IssueExplanationResponse,
+    status_code=status.HTTP_200_OK,
+    summary="[INTERNAL/AUTHORITY] AI-assisted issue explanation (advisory only)",
+    description=(
+        "INTERNAL AUTHORITY API -- not authenticated yet. Asks Gemini to "
+        "explain, in plain language, why this issue's EXISTING "
+        "category/severity classification and suggested/assigned "
+        "department appear reasonable, grounded only in the issue's "
+        "already-extracted structured fields. NEVER PERSISTED -- generated "
+        "fresh on every call. ADVISORY ONLY: never changes the issue's "
+        "category, severity, status, or department -- an authority acts "
+        "through the existing lifecycle/assignment endpoints, never this "
+        "one. Only structured fields are sent to Gemini (never the raw "
+        "original complaint text or public_id). If Gemini is unavailable "
+        "or fails, a sanitized error is returned instead of a fabricated "
+        "explanation, and the rest of the authority workflow is "
+        "unaffected."
+    ),
+    responses={status.HTTP_404_NOT_FOUND: {"description": "No issue found with that public id."}},
+)
+def explain_issue_with_ai(public_id: str, db: Session = Depends(get_db)) -> IssueExplanationResponse:
+    result = get_issue_ai_explanation(db, public_id)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Issue not found.",
+        )
+    return result
 
 
 # ============================================================================

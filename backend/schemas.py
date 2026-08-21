@@ -609,3 +609,22 @@ class JurisdictionResponse(BaseModel):
 
 class JurisdictionListResponse(BaseModel):
     jurisdictions: list[JurisdictionResponse]
+
+
+# --- On-demand AI issue explanation (Milestone 14, Priority 2) ---------------
+
+
+class IssueExplanationResponse(BaseModel):
+    """Response for POST /api/admin/issues/{public_id}/explain.
+
+    Never persisted -- generated fresh on every request from the issue's
+    already-extracted structured fields, and discarded once returned.
+    `explanation`/`considerations` are null if Gemini was unavailable or
+    failed; in that case `error` carries a sanitized (never raw-exception)
+    message. This endpoint never changes the issue in any way regardless
+    of outcome -- see backend/service.py's get_issue_ai_explanation.
+    """
+
+    explanation: str | None
+    considerations: list[str]
+    error: str | None = None

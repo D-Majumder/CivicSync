@@ -18,7 +18,7 @@ from google.genai.errors import APIError
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from ai.client import analyze_complaint, generate_insight_prioritization
+from ai.client import analyze_complaint, generate_insight_prioritization, generate_issue_explanation
 from ai.schemas import IssueCategory, SeverityLevel
 from backend import insights as insight_rules
 from backend.assignment_rules import DepartmentInactiveError, DepartmentNotFoundError
@@ -68,6 +68,7 @@ from backend.schemas import (
     FunnelStage,
     Insight,
     InsightsResponse,
+    IssueExplanationResponse,
     JurisdictionListResponse,
     JurisdictionResponse,
     JurisdictionSummary,
@@ -241,24 +242,30 @@ def list_admin_issues(
     department_code: str | None = None,
     severity: SeverityLevel | None = None,
     category: IssueCategory | None = None,
+    jurisdiction_code: str | None = None,
     sort_by: str = "updated_at",
     sort_order: str = "desc",
     limit: int = 20,
     offset: int = 0,
-) -> AdminIssueListResponse:
+) -> AdminIssueListResponse | None:
     """Build the paginated, filtered authority issue list. Never calls
-    Gemini -- pure read over already-persisted issues."""
-    items, total = list_issues_for_admin(
+    Gemini -- pure read over already-persisted issues. Returns None if
+    jurisdiction_code doesn't match any real jurisdiction (route -> 404)."""
+    result = list_issues_for_admin(
         db,
         status=status,
         department_code=department_code,
         severity=severity,
         category=category,
+        jurisdiction_code=jurisdiction_code,
         sort_by=sort_by,
         sort_order=sort_order,
         limit=limit,
         offset=offset,
     )
+    if result is None:
+        return None
+    items, total = result
     return AdminIssueListResponse(
         items=[_build_admin_list_item(issue) for issue in items],
         total=total,
@@ -319,12 +326,23 @@ def get_admin_issue_detail(db: Session, public_id: str) -> AdminIssueDetailRespo
     )
 
 
-def get_dashboard_summary(db: Session) -> DashboardSummaryResponse:
+def get_dashboard_summary(
+    db: Session, *, jurisdiction_code: str | None = None
+) -> DashboardSummaryResponse | None:
     """Build the dashboard aggregate-count summary. Every count comes from
     a SQL GROUP BY query (see backend.repository) -- this function never
-    iterates raw Issue rows. Never calls Gemini."""
-    by_status = count_issues_by_status(db)
-    by_severity = count_issues_by_severity(db)
+    iterates raw Issue rows. jurisdiction_code scopes by_status/by_severity
+    (and total_issues) to that jurisdiction's subtree; by_department is
+    intentionally always the full active-department list regardless of
+    scoping, since it already shows each department's own count (0 for
+    departments outside the scope reads the same as "no issues", so no
+    information is misrepresented). Returns None if jurisdiction_code
+    doesn't match any real jurisdiction (route -> 404). Never calls
+    Gemini."""
+    by_status = count_issues_by_status(db, jurisdiction_code=jurisdiction_code)
+    if by_status is None:
+        return None
+    by_severity = count_issues_by_severity(db, jurisdiction_code=jurisdiction_code)
     by_department = [
         DepartmentIssueCount(code=department.code, name=department.name, count=count)
         for department, count in count_issues_by_department(db)
@@ -363,14 +381,25 @@ def list_operational_queue(
     *,
     department_code: str | None = None,
     severity: SeverityLevel | None = None,
+    jurisdiction_code: str | None = None,
     limit: int = 20,
     offset: int = 0,
-) -> AdminIssueListResponse:
+) -> AdminIssueListResponse | None:
     """Build the operational queue (excludes CLOSED/REJECTED, ordered by
-    severity priority then oldest updated_at). Never calls Gemini."""
-    items, total = repo_get_operational_queue(
-        db, department_code=department_code, severity=severity, limit=limit, offset=offset
+    severity priority then oldest updated_at). Returns None if
+    jurisdiction_code doesn't match any real jurisdiction. Never calls
+    Gemini."""
+    result = repo_get_operational_queue(
+        db,
+        department_code=department_code,
+        severity=severity,
+        jurisdiction_code=jurisdiction_code,
+        limit=limit,
+        offset=offset,
     )
+    if result is None:
+        return None
+    items, total = result
     return AdminIssueListResponse(
         items=[_build_admin_list_item(issue) for issue in items],
         total=total,
@@ -385,18 +414,25 @@ def list_stale_issues(
     older_than_hours: int = 48,
     department_code: str | None = None,
     status: IssueStatus | None = None,
+    jurisdiction_code: str | None = None,
     limit: int = 20,
     offset: int = 0,
-) -> AdminIssueListResponse:
-    """Build the stale/aging-issues list. Read-only. Never calls Gemini."""
-    items, total = repo_get_stale_issues(
+) -> AdminIssueListResponse | None:
+    """Build the stale/aging-issues list. Read-only. Returns None if
+    jurisdiction_code doesn't match any real jurisdiction. Never calls
+    Gemini."""
+    result = repo_get_stale_issues(
         db,
         older_than_hours=older_than_hours,
         department_code=department_code,
         status=status,
+        jurisdiction_code=jurisdiction_code,
         limit=limit,
         offset=offset,
     )
+    if result is None:
+        return None
+    items, total = result
     return AdminIssueListResponse(
         items=[_build_admin_list_item(issue) for issue in items],
         total=total,
@@ -660,3 +696,70 @@ def get_jurisdiction_detail(db: Session, code: str) -> JurisdictionResponse | No
         return None
     ancestry = get_jurisdiction_ancestry(db, jurisdiction)
     return _to_jurisdiction_response(jurisdiction, ancestry)
+
+
+# --- On-demand AI issue explanation (Milestone 14, Priority 2) ---------------
+
+
+def get_issue_ai_explanation(db: Session, public_id: str) -> IssueExplanationResponse | None:
+    """Ask Gemini to explain a single issue's EXISTING classification, on
+    demand, for an authority reviewing it. Returns None if no Issue
+    matches public_id (route -> 404).
+
+    NEVER PERSISTED: this reads the issue's already-extracted structured
+    fields, calls Gemini fresh, and returns the result without writing
+    anything back to the Issue or any other table -- no new column, no
+    migration, nothing stored. Calling this twice in a row can produce
+    two different (though similarly-grounded) explanations; that's
+    expected and fine, since nothing here is authoritative.
+
+    Only structured/extracted fields are sent to Gemini (category,
+    problem, location, duration, affected_population, severity,
+    confidence, suggested_department, assigned_department, status_label)
+    -- never original_text or public_id, matching the same privacy
+    discipline as get_prioritized_insights() above.
+
+    Gemini is strictly advisory and explanatory here: it explains why the
+    EXISTING classification/department make sense, and is instructed
+    never to propose changing them (see EXPLANATION_SYSTEM_PROMPT). This
+    function itself provides an additional, code-level guarantee on top
+    of that prompt instruction -- it has no code path that writes to
+    Issue, IssueStatusHistory, or IssueAssignmentHistory at all.
+
+    If Gemini is unavailable, fails, or returns something unusable, a
+    sanitized (never raw-exception) `error` is returned instead of
+    fabricating an explanation -- this never blocks the rest of the
+    authority workflow, since the issue detail itself doesn't depend on
+    this endpoint succeeding.
+    """
+    issue = get_issue_by_public_id(db, public_id)
+    if issue is None:
+        return None
+
+    issue_context = {
+        "category": issue.category,
+        "problem": issue.problem,
+        "location": issue.location,
+        "duration": issue.duration,
+        "affected_population": issue.affected_population,
+        "severity": issue.severity.value,
+        "confidence": issue.confidence,
+        "suggested_department": issue.suggested_department,
+        "assigned_department": issue.assigned_department.name if issue.assigned_department else None,
+        "status_label": _status_label(issue.status),
+    }
+
+    try:
+        ai_output = generate_issue_explanation(issue_context)
+    except (EnvironmentError, APIError, ValueError):
+        return IssueExplanationResponse(
+            explanation=None,
+            considerations=[],
+            error="AI explanation is temporarily unavailable.",
+        )
+
+    return IssueExplanationResponse(
+        explanation=ai_output.explanation,
+        considerations=ai_output.considerations,
+        error=None,
+    )

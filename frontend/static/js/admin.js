@@ -55,6 +55,12 @@
   const state = {
     view: 'dashboard',
     departments: [], // cached GET /api/departments result
+    // Set once at boot by loadJurisdictionContext() to the real, current
+    // LOCAL_BODY jurisdiction's code (e.g. "IN-WB-NADIA-KRISHNANAGAR"), or
+    // null if none is configured. Every view below passes this through
+    // to its API calls so the whole Command Center operates within that
+    // jurisdiction's real scope -- not merely displaying it (Milestone 14).
+    currentJurisdictionCode: null,
     queue: { department_code: '', severity: '', offset: 0, limit: 20, total: 0 },
     issues: {
       status: '', department_code: '', severity: '', category: '',
@@ -210,7 +216,7 @@
   async function loadDashboard() {
     showGlobalError(null);
     const [summaryR, funnelR, severityR, workloadR, agingR, activityR] = await Promise.allSettled([
-      CivicSyncApi.getDashboardSummary(),
+      CivicSyncApi.getDashboardSummary({ jurisdiction_code: state.currentJurisdictionCode || null }),
       CivicSyncApi.getFunnel(),
       CivicSyncApi.getSeverityDistribution(),
       CivicSyncApi.getDepartmentWorkload(),
@@ -306,6 +312,7 @@
       const response = await CivicSyncApi.getOperationalQueue({
         department_code: state.queue.department_code || null,
         severity: state.queue.severity || null,
+        jurisdiction_code: state.currentJurisdictionCode || null,
         limit: state.queue.limit,
         offset: state.queue.offset,
       });
@@ -349,6 +356,7 @@
         department_code: state.issues.department_code || null,
         severity: state.issues.severity || null,
         category: state.issues.category || null,
+        jurisdiction_code: state.currentJurisdictionCode || null,
         sort_by: state.issues.sort_by,
         sort_order: state.issues.sort_order,
         limit: state.issues.limit,
@@ -396,6 +404,7 @@
         older_than_hours: state.stale.older_than_hours,
         department_code: state.stale.department_code || null,
         status: state.stale.status || null,
+        jurisdiction_code: state.currentJurisdictionCode || null,
         limit: state.stale.limit,
         offset: state.stale.offset,
       });
@@ -642,6 +651,16 @@
             <div><dt>AI Suggested Department</dt><dd>${CivicSyncUtils.escapeHtml(detail.suggested_department || 'Not determined')}</dd></div>
             <div><dt>AI Confidence</dt><dd>${confidencePct}%</dd></div>
           </dl>
+
+          <button class="btn btn-secondary mt-sm" id="explain-with-ai-btn" type="button">
+            Explain with AI
+          </button>
+          <div id="ai-explanation-result" class="mt-sm" hidden>
+            <p class="ai-panel__label" style="margin-bottom: 4px;">🤖 AI Explanation \u2014 Advisory Only</p>
+            <p id="ai-explanation-text" class="type-body-sm"></p>
+            <ul id="ai-explanation-considerations" class="type-body-sm" style="margin: 6px 0 0 18px; padding: 0;"></ul>
+          </div>
+          <p id="ai-explanation-error" class="action-feedback is-error" hidden></p>
         </div>
       </div>
 
@@ -697,6 +716,45 @@
     modalBody.querySelectorAll('.transition-btn').forEach((btn) => {
       btn.addEventListener('click', () => handleTransition(detail.public_id, btn.dataset.status));
     });
+    document.getElementById('explain-with-ai-btn').addEventListener('click', () => handleExplain(detail.public_id));
+  }
+
+  async function handleExplain(publicId) {
+    const btn = document.getElementById('explain-with-ai-btn');
+    const resultEl = document.getElementById('ai-explanation-result');
+    const textEl = document.getElementById('ai-explanation-text');
+    const considerationsEl = document.getElementById('ai-explanation-considerations');
+    const errorEl = document.getElementById('ai-explanation-error');
+
+    btn.disabled = true;
+    btn.textContent = 'Asking Gemini\u2026';
+    resultEl.hidden = true;
+    errorEl.hidden = true;
+
+    try {
+      const response = await CivicSyncApi.explainIssue(publicId);
+      // This is a read-only, advisory, never-persisted call -- it cannot
+      // change official state, so there is nothing to refresh here
+      // (unlike handleAssign/handleTransition, which do refresh the
+      // modal + active list after a real state change).
+      if (response.explanation) {
+        textEl.textContent = response.explanation;
+        considerationsEl.innerHTML = (response.considerations || [])
+          .map((c) => `<li>${CivicSyncUtils.escapeHtml(c)}</li>`)
+          .join('');
+        resultEl.hidden = false;
+      } else {
+        errorEl.textContent =
+          response.error || 'AI explanation is temporarily unavailable.';
+        errorEl.hidden = false;
+      }
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.hidden = false;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Explain with AI';
+    }
   }
 
   async function handleAssign(publicId) {
@@ -758,7 +816,7 @@
   }
 
   // ================================================================================
-  // JURISDICTION CONTEXT (Milestone 13)
+  // JURISDICTION CONTEXT (Milestone 13 display, Milestone 14 operational scoping)
   // ================================================================================
   //
   // Real, backend-driven, read-only context -- not a decorative selector.
@@ -767,6 +825,14 @@
   // entirely from GET /api/jurisdictions. If no LOCAL_BODY jurisdiction
   // is configured yet, the panel stays hidden rather than showing a fake
   // placeholder chain.
+  //
+  // Milestone 14: state.currentJurisdictionCode (set here) is what makes
+  // this operational rather than cosmetic -- every dashboard/queue/
+  // issues/stale load below passes it through to the real API, so the
+  // whole Command Center genuinely operates within this jurisdiction's
+  // scope. Proven by tests/test_jurisdiction_scoping.py, which
+  // constructs a second, independent jurisdiction and confirms it's
+  // correctly excluded when scoped to the first.
 
   async function loadJurisdictionContext() {
     const panel = document.getElementById('jurisdiction-context');
@@ -775,19 +841,28 @@
       const response = await CivicSyncApi.getJurisdictions({ level: 'LOCAL_BODY' });
       const localBody = response.jurisdictions[0];
       if (!localBody) {
+        state.currentJurisdictionCode = null;
         panel.hidden = true;
         return;
       }
+      state.currentJurisdictionCode = localBody.code;
       breadcrumbEl.textContent = localBody.ancestry.map((j) => j.name).join(' / ');
       panel.hidden = false;
     } catch (err) {
+      state.currentJurisdictionCode = null;
       panel.hidden = true; // fail quietly -- this is context, not core functionality
     }
   }
 
   // --- Boot --------------------------------------------------------------------------
+  //
+  // Jurisdiction context is awaited BEFORE the first view loads, so even
+  // the very first render (e.g. the Dashboard on a fresh page load) is
+  // already correctly scoped rather than briefly showing unscoped data.
 
-  loadJurisdictionContext();
-  const initialView = (window.location.hash || '#dashboard').slice(1);
-  setActiveView(initialView);
+  (async () => {
+    await loadJurisdictionContext();
+    const initialView = (window.location.hash || '#dashboard').slice(1);
+    setActiveView(initialView);
+  })();
 })();
