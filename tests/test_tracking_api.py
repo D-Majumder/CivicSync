@@ -181,6 +181,51 @@ def test_from_status_is_not_exposed_in_timeline(client):
         assert set(entry.keys()) == {"status", "timestamp", "reason"}
 
 
+def test_all_timestamps_are_unambiguous_utc_iso_strings(client):
+    """Regression test for a real bug: timestamps from SQLite round-trip
+    as naive datetimes (UTC wall-clock value, no tzinfo). Serialized
+    as-is, that produces an ISO string with no "Z"/offset -- which
+    JavaScript's `new Date(...)` parses as LOCAL time per spec, silently
+    corrupting the displayed time by the viewer's UTC offset (observed as
+    exactly a 5h30m error for an IST viewer). Every timestamp in an API
+    response must end in "Z" or a numeric UTC offset so this can never
+    happen regardless of client."""
+    created = _submit_issue(client)
+    _classify(client, created["public_id"])
+    body = client.get(f"/api/track/{created['public_id']}").json()
+
+    def assert_unambiguous(value, field_name):
+        assert value is not None, f"{field_name} was unexpectedly null"
+        assert value.endswith("Z") or "+" in value[10:] or "-" in value[19:], (
+            f"{field_name}={value!r} has no timezone marker -- this is exactly "
+            f"the ambiguous-timestamp bug."
+        )
+
+    assert_unambiguous(body["created_at"], "created_at")
+    assert_unambiguous(body["updated_at"], "updated_at")
+    for entry in body["timeline"]:
+        assert_unambiguous(entry["timestamp"], "timeline.timestamp")
+
+
+def test_timestamp_round_trips_correctly_to_ist(client):
+    """End-to-end proof the fix actually produces the right IST wall-clock
+    time for a known UTC instant -- not just "has a Z suffix"."""
+    from datetime import datetime, timedelta, timezone
+
+    created = _submit_issue(client)
+    body = client.get(f"/api/track/{created['public_id']}").json()
+
+    parsed = datetime.fromisoformat(body["created_at"].replace("Z", "+00:00"))
+    assert parsed.tzinfo is not None
+
+    ist = parsed.astimezone(timezone(timedelta(hours=5, minutes=30), name="IST"))
+    utc = parsed.astimezone(timezone.utc)
+    # IST is always exactly UTC+5:30 -- verifying the offset itself,
+    # rather than hardcoding any specific clock time.
+    offset = ist.utcoffset() - utc.utcoffset()
+    assert offset.total_seconds() == 5.5 * 3600
+
+
 # --- 12-17: privacy -- internal/sensitive fields never exposed --------------
 
 

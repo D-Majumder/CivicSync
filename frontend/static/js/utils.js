@@ -23,19 +23,39 @@ const CivicSyncUtils = {
     return 'chip-neutral'; // SUBMITTED, CLASSIFIED
   },
 
-  /** ISO timestamp -> short, locale-aware, human-readable string */
+  /**
+   * CivicSync targets an India-based civic authority/citizen audience, so
+   * every timestamp in the product is shown in Asia/Kolkata (IST) --
+   * explicitly, via Intl.DateTimeFormat's `timeZone` option, regardless of
+   * the viewer's own device/browser timezone. This is deliberate: two
+   * different officials looking at the same report should see the same
+   * displayed time.
+   *
+   * IMPORTANT: this only produces a correct result if `isoString` is
+   * unambiguous (carries a "Z" or "+HH:MM" offset). The backend
+   * (backend/schemas.py's UtcDatetime type) guarantees every timestamp it
+   * returns does. Do NOT remove that guarantee and rely on this function
+   * alone -- a timezone-designator-less string is parsed by `new Date()`
+   * as LOCAL time per the ECMA-262 spec, which silently reintroduces the
+   * exact bug this constant exists to prevent.
+   */
+  DISPLAY_TIME_ZONE: 'Asia/Kolkata',
+
+  /** ISO timestamp -> short, IST, human-readable string. */
   formatTimestamp(isoString) {
     if (!isoString) return '\u2014';
     try {
       const date = new Date(isoString);
       if (Number.isNaN(date.getTime())) return isoString;
-      return date.toLocaleString(undefined, {
+      return new Intl.DateTimeFormat('en-IN', {
+        timeZone: CivicSyncUtils.DISPLAY_TIME_ZONE,
         year: 'numeric',
         month: 'short',
         day: 'numeric',
         hour: 'numeric',
         minute: '2-digit',
-      });
+        hour12: true,
+      }).format(date) + ' IST';
     } catch (err) {
       return isoString;
     }

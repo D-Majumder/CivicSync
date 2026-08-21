@@ -7,13 +7,43 @@ model (CivicIssue). CivicIssue is reused directly as the response model
 for POST /api/analyze (AI-only, not persisted).
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
+from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
 from ai.schemas import IssueCategory, SeverityLevel
 from backend.models import IssueStatus
+
+
+def _tag_naive_datetime_as_utc(value: Any) -> Any:
+    """Attach explicit UTC tzinfo to a naive datetime.
+
+    backend/models.py always writes timestamps via datetime.now(timezone.utc)
+    (genuinely UTC), but SQLite's DATETIME columns don't persist a timezone
+    offset -- reading a row back gives a *naive* datetime whose wall-clock
+    value is UTC, with no marker saying so. Serialized as-is, that produces
+    an ambiguous ISO string like "2026-08-21T07:21:25" (no "Z"/offset),
+    which JavaScript's `new Date(...)` -- per the ECMA-262 spec -- parses
+    as LOCAL time rather than UTC, silently corrupting every displayed
+    timestamp by the viewer's UTC offset.
+
+    This validator is the fix at the source: it runs before Pydantic's own
+    datetime parsing, so every API response ends up with an explicit
+    "+00:00"/"Z" suffix and is unambiguous to any client. It never changes
+    the underlying value (the wall-clock digits are untouched) and never
+    touches the database, a migration, or business logic -- only how an
+    already-correct value gets *labeled* on its way out over the wire.
+    """
+    if isinstance(value, datetime) and value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
+# Use this instead of `datetime` for every timestamp field in this file.
+# See _tag_naive_datetime_as_utc's docstring for why it exists.
+UtcDatetime = Annotated[datetime, BeforeValidator(_tag_naive_datetime_as_utc)]
 
 
 class AnalyzeRequest(BaseModel):
@@ -71,10 +101,10 @@ class IssueResponse(BaseModel):
     assigned_department: DepartmentSummary | None
     status: IssueStatus
     resolution_summary: str | None
-    created_at: datetime
-    updated_at: datetime
-    resolved_at: datetime | None
-    closed_at: datetime | None
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
+    resolved_at: UtcDatetime | None
+    closed_at: UtcDatetime | None
 
 
 class StatusUpdateRequest(BaseModel):
@@ -107,7 +137,7 @@ class StatusHistoryEntryResponse(BaseModel):
     from_status: IssueStatus | None
     to_status: IssueStatus
     reason: str | None
-    changed_at: datetime
+    changed_at: UtcDatetime
 
 
 class DepartmentResponse(BaseModel):
@@ -160,7 +190,7 @@ class AssignmentResponse(BaseModel):
 
     code: str
     name: str
-    assigned_at: datetime
+    assigned_at: UtcDatetime
     reason: str | None
 
 
@@ -173,8 +203,8 @@ class AssignmentHistoryEntryResponse(BaseModel):
 
     department_code: str
     department_name: str
-    assigned_at: datetime
-    unassigned_at: datetime | None
+    assigned_at: UtcDatetime
+    unassigned_at: UtcDatetime | None
     reason: str | None
 
 
@@ -189,7 +219,7 @@ class PublicTimelineEntry(BaseModel):
     """
 
     status: IssueStatus
-    timestamp: datetime
+    timestamp: UtcDatetime
     reason: str | None
 
 
@@ -219,8 +249,8 @@ class PublicIssueTrackingResponse(BaseModel):
     # "In Progress" for IN_PROGRESS) -- IssueStatus itself is unchanged.
     status_label: str
     assigned_department: DepartmentSummary | None
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
     timeline: list[PublicTimelineEntry]
 
 
@@ -247,8 +277,8 @@ class AdminIssueListItem(BaseModel):
     status: IssueStatus
     status_label: str
     assigned_department: DepartmentSummary | None
-    created_at: datetime
-    updated_at: datetime
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
 
 
 class AdminIssueListResponse(BaseModel):
@@ -272,7 +302,7 @@ class AdminStatusHistoryEntry(BaseModel):
     from_status: IssueStatus | None
     to_status: IssueStatus
     reason: str | None
-    changed_at: datetime
+    changed_at: UtcDatetime
 
 
 class AdminAssignmentHistoryEntry(BaseModel):
@@ -282,8 +312,8 @@ class AdminAssignmentHistoryEntry(BaseModel):
 
     department_code: str
     department_name: str
-    assigned_at: datetime
-    unassigned_at: datetime | None
+    assigned_at: UtcDatetime
+    unassigned_at: UtcDatetime | None
     reason: str | None
 
 
@@ -311,10 +341,10 @@ class AdminIssueDetailResponse(BaseModel):
     status: IssueStatus
     status_label: str
     resolution_summary: str | None
-    created_at: datetime
-    updated_at: datetime
-    resolved_at: datetime | None
-    closed_at: datetime | None
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
+    resolved_at: UtcDatetime | None
+    closed_at: UtcDatetime | None
     status_history: list[AdminStatusHistoryEntry]
     assignment_history: list[AdminAssignmentHistoryEntry]
 
@@ -455,7 +485,7 @@ class RecentActivityEntry(BaseModel):
     from_status: IssueStatus | None
     to_status: IssueStatus
     reason: str | None
-    changed_at: datetime
+    changed_at: UtcDatetime
 
 
 class RecentActivityResponse(BaseModel):
@@ -503,7 +533,7 @@ class Insight(BaseModel):
 
 class InsightsResponse(BaseModel):
     insights: list[Insight]
-    generated_at: datetime
+    generated_at: UtcDatetime
 
 
 class AIPrioritizationRecommendation(BaseModel):
