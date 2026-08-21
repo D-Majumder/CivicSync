@@ -42,6 +42,7 @@ from backend.schemas import (
     InsightsResponse,
     IssueExplanationResponse,
     IssueResponse,
+    OperationalBriefingResponse,
     JurisdictionListResponse,
     JurisdictionResponse,
     PrioritizedInsightsResponse,
@@ -62,6 +63,7 @@ from backend.service import (
     get_department_workload_summary,
     get_issue_ai_explanation,
     get_jurisdiction_detail,
+    get_operational_briefing,
     get_jurisdictions,
     get_prioritized_insights,
     get_public_tracking,
@@ -909,6 +911,67 @@ def explain_issue_with_ai(public_id: str, db: Session = Depends(get_db)) -> Issu
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Issue not found.",
+        )
+    return result
+
+
+# ============================================================================
+# AI Operational Briefing (Milestone 15) -- INTERNAL/AUTHORITY, NOT PUBLIC.
+# Same caveat as the rest of this API: NOT authenticated yet.
+#
+# AI SAFETY BOUNDARY: same discipline as the other two Gemini-backed routes
+# above. Gemini synthesizes a briefing from a jurisdiction-scoped (and
+# optionally department-scoped) set of currently active issues and never
+# changes any Issue, assignment, or status. Nothing here is persisted; the
+# briefing is generated fresh on every call and discarded once returned.
+# See ai/prompts.py's OPERATIONAL_BRIEFING_SYSTEM_PROMPT and
+# backend/service.py's get_operational_briefing() for the enforced boundary.
+# ============================================================================
+
+
+@app.post(
+    "/api/admin/analytics/operational-briefing",
+    response_model=OperationalBriefingResponse,
+    status_code=status.HTTP_200_OK,
+    summary="[INTERNAL/AUTHORITY] AI-assisted operational briefing (advisory only)",
+    description=(
+        "INTERNAL AUTHORITY API -- not authenticated yet. Asks Gemini to "
+        "synthesize a short operational briefing from the currently "
+        "ACTIVE issues in the given jurisdiction (and optional "
+        "department), grounded only in each issue's already-extracted "
+        "structured fields (category, severity, status, department). "
+        "NEVER PERSISTED -- generated fresh on every call. ADVISORY "
+        "ONLY: never changes any issue's category, severity, status, or "
+        "department. Only structured fields are sent to Gemini (never "
+        "original complaint text, public_id, or citizen-identifying "
+        "data). Reuses the same jurisdiction subtree resolution as the "
+        "Milestone 14 admin list/queue/stale/dashboard endpoints -- a "
+        "district-level jurisdiction_code includes every local body "
+        "beneath it. If there are no active issues in scope, or if "
+        "Gemini is unavailable or fails, a sanitized error is returned "
+        "instead of a fabricated briefing, and the rest of the authority "
+        "workflow is unaffected."
+    ),
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "No jurisdiction found with that code."}
+    },
+)
+def generate_operational_briefing_route(
+    jurisdiction_code: str = Query(
+        ..., description="Jurisdiction to brief on (itself + every descendant in its subtree)."
+    ),
+    department_code: str | None = Query(
+        default=None, description="Optional: narrow the briefing to a single department."
+    ),
+    db: Session = Depends(get_db),
+) -> OperationalBriefingResponse:
+    result = get_operational_briefing(
+        db, jurisdiction_code=jurisdiction_code, department_code=department_code
+    )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Jurisdiction not found.",
         )
     return result
 

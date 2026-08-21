@@ -227,3 +227,67 @@ class IssueExplanationOutput(BaseModel):
             "population, duration, severity)."
         ),
     )
+
+
+class OperationalBriefingOutput(BaseModel):
+    """Gemini-facing structured output for Milestone 15's "AI Operational
+    Briefing" authority capability.
+
+    A separate, narrow capability from CivicIssue (new-complaint
+    extraction), InsightPrioritizationOutput (aggregate-insight
+    reasoning), and IssueExplanationOutput (single-issue explanation)
+    above -- this one synthesizes a SET of already-persisted, currently
+    active issues scoped to a jurisdiction (and optionally a single
+    department) into a short operational briefing, on demand, at an
+    authority's request. Reuses the same Gemini client/model plumbing
+    (ai/client.py's _get_client(), GEMINI_MODEL) rather than standing up
+    a second AI client.
+
+    extra="ignore" for the same reason as the other Gemini-facing output
+    schemas in this module.
+
+    Strictly advisory: Gemini synthesizes and observes patterns in the
+    supplied structured data, and is explicitly instructed not to
+    fabricate a pattern from a single issue, not to claim urgency without
+    supplied evidence, and never to propose changing any official field.
+    Nothing built on this output is ever persisted or allowed to mutate
+    an Issue -- see backend/service.py's get_operational_briefing.
+    """
+
+    model_config = {"extra": "ignore"}
+
+    briefing: str = Field(
+        ...,
+        description=(
+            "A concise (3-6 sentence) operational synthesis of the "
+            "supplied active issues -- grounded ONLY in the structured "
+            "data provided, never inventing facts. If the dataset is too "
+            "small or too varied to establish a pattern, say so plainly "
+            "rather than forcing one."
+        ),
+    )
+    key_observations: list[str] = Field(
+        default_factory=list,
+        description=(
+            "0-5 short, concrete OBSERVED FACTS drawn directly from the "
+            "supplied data (e.g. counts, category/severity/department "
+            "concentrations) -- not interpretations or recommendations."
+        ),
+    )
+    priority_signals: list[str] = Field(
+        default_factory=list,
+        description=(
+            "0-5 short signals about which supplied issues or patterns "
+            "deserve attention first, with the reasoning grounded in the "
+            "supplied severity/category/department fields -- never "
+            "claiming urgency without supporting evidence in the data."
+        ),
+    )
+    considerations: list[str] = Field(
+        default_factory=list,
+        description=(
+            "0-5 short, cautious OPERATIONAL CONSIDERATIONS for the "
+            "authority to weigh -- explicitly framed as considerations, "
+            "not instructions or official decisions."
+        ),
+    )

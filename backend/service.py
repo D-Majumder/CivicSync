@@ -18,7 +18,12 @@ from google.genai.errors import APIError
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from ai.client import analyze_complaint, generate_insight_prioritization, generate_issue_explanation
+from ai.client import (
+    analyze_complaint,
+    generate_insight_prioritization,
+    generate_issue_explanation,
+    generate_operational_briefing,
+)
 from ai.schemas import IssueCategory, SeverityLevel
 from backend import insights as insight_rules
 from backend.assignment_rules import DepartmentInactiveError, DepartmentNotFoundError
@@ -32,6 +37,7 @@ from backend.repository import (
     count_issues_by_severity,
     count_issues_by_status,
     create_issue_from_civic_issue,
+    get_active_issues_for_briefing,
     get_assignment_history,
     get_department_by_code,
     get_department_issue_counts,
@@ -72,6 +78,7 @@ from backend.schemas import (
     JurisdictionListResponse,
     JurisdictionResponse,
     JurisdictionSummary,
+    OperationalBriefingResponse,
     PrioritizedInsightsResponse,
     PublicIssueTrackingResponse,
     PublicTimelineEntry,
@@ -760,6 +767,89 @@ def get_issue_ai_explanation(db: Session, public_id: str) -> IssueExplanationRes
 
     return IssueExplanationResponse(
         explanation=ai_output.explanation,
+        considerations=ai_output.considerations,
+        error=None,
+    )
+
+
+# --- AI Operational Briefing (Milestone 15) -----------------------------------
+
+
+def get_operational_briefing(
+    db: Session, *, jurisdiction_code: str, department_code: str | None = None
+) -> OperationalBriefingResponse | None:
+    """Ask Gemini to synthesize a short operational briefing for a
+    jurisdiction (and optionally a single department), on demand, for an
+    authority reviewing the current situation. Returns None if
+    jurisdiction_code doesn't match any real jurisdiction (route -> 404).
+
+    NEVER PERSISTED: this reads the currently active issues in scope
+    (already-extracted structured fields only), calls Gemini fresh, and
+    returns the result without writing anything back to any table -- no
+    new column, no migration, nothing stored. Calling this twice in a row
+    can produce two different (though similarly-grounded) briefings;
+    that's expected and fine, since nothing here is authoritative.
+
+    Reuses get_active_issues_for_briefing for jurisdiction+department
+    scoping (no jurisdiction logic duplicated here). Only structured,
+    per-issue fields are sent to Gemini (category, severity, status
+    label, department name) -- never original_text, public_id, or any
+    citizen-identifying data, matching the same privacy discipline as
+    get_prioritized_insights() and get_issue_ai_explanation() above.
+
+    If there are no active issues in scope, Gemini is never called
+    (nothing to brief on, and calling it anyway would risk fabricating a
+    pattern with no grounding) -- a plain, honest, non-AI-generated
+    message is returned via `error` instead. If Gemini is unavailable,
+    fails, or returns something unusable, a sanitized (never
+    raw-exception) `error` is returned instead of fabricating a
+    briefing -- this never blocks the rest of the authority workflow.
+    """
+    issues = get_active_issues_for_briefing(
+        db, jurisdiction_code=jurisdiction_code, department_code=department_code
+    )
+    if issues is None:
+        return None
+
+    if not issues:
+        return OperationalBriefingResponse(
+            briefing=None,
+            key_observations=[],
+            priority_signals=[],
+            considerations=[],
+            error="No active issues in this scope to generate a briefing from.",
+        )
+
+    payload = {
+        "jurisdiction_code": jurisdiction_code,
+        "department_code": department_code,
+        "total_active_issues": len(issues),
+        "issues": [
+            {
+                "category": issue.category,
+                "severity": issue.severity.value,
+                "status": _status_label(issue.status),
+                "department": issue.assigned_department.name if issue.assigned_department else None,
+            }
+            for issue in issues
+        ],
+    }
+
+    try:
+        ai_output = generate_operational_briefing(payload)
+    except (EnvironmentError, APIError, ValueError):
+        return OperationalBriefingResponse(
+            briefing=None,
+            key_observations=[],
+            priority_signals=[],
+            considerations=[],
+            error="AI operational briefing is temporarily unavailable.",
+        )
+
+    return OperationalBriefingResponse(
+        briefing=ai_output.briefing,
+        key_observations=ai_output.key_observations,
+        priority_signals=ai_output.priority_signals,
         considerations=ai_output.considerations,
         error=None,
     )

@@ -237,6 +237,21 @@ const CivicSyncApi = {
   },
 
   /**
+   * On-demand AI operational briefing for a jurisdiction (and optional
+   * department) -- Milestone 15. Advisory only -- never changes any
+   * issue. Never persisted: a fresh call to Gemini every time.
+   */
+  generateOperationalBriefing(jurisdictionCode, departmentCode) {
+    return request(
+      `/api/admin/analytics/operational-briefing${toQueryString({
+        jurisdiction_code: jurisdictionCode,
+        department_code: departmentCode || null,
+      })}`,
+      { method: 'POST' }
+    );
+  },
+
+  /**
    * Officially assign/reassign an issue to a department. This is the
    * ONLY assignment endpoint -- never derived from the AI's
    * suggested_department. May also advance the lifecycle (CLASSIFIED ->

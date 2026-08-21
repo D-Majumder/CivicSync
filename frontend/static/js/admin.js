@@ -517,6 +517,14 @@
   async function loadIntelligence() {
     document.getElementById('ai-advisory-panel').hidden = true;
     document.getElementById('ai-advisory-error').hidden = true;
+    document.getElementById('briefing-result').hidden = true;
+    document.getElementById('briefing-error').hidden = true;
+    await ensureDepartmentsLoaded();
+    populateSelect(
+      document.getElementById('briefing-department-select'),
+      state.departments.map((d) => ({ value: d.code, label: d.name })),
+      ''
+    );
     try {
       const response = await CivicSyncApi.getInsights();
       renderInsights(response.insights);
@@ -557,6 +565,54 @@
     } finally {
       btn.disabled = false;
       btn.textContent = 'Get AI Advisory';
+    }
+  });
+
+  document.getElementById('generate-briefing-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('generate-briefing-btn');
+    const resultPanel = document.getElementById('briefing-result');
+    const errorEl = document.getElementById('briefing-error');
+    const departmentCode = document.getElementById('briefing-department-select').value || null;
+
+    if (!state.currentJurisdictionCode) {
+      errorEl.hidden = false;
+      errorEl.textContent = 'No jurisdiction is currently configured to brief on.';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Asking Gemini\u2026';
+    resultPanel.hidden = true;
+    errorEl.hidden = true;
+
+    try {
+      const response = await CivicSyncApi.generateOperationalBriefing(
+        state.currentJurisdictionCode,
+        departmentCode
+      );
+      if (response.briefing) {
+        document.getElementById('briefing-text').textContent = response.briefing;
+        document.getElementById('briefing-observations').innerHTML = response.key_observations
+          .map((o) => `<li>${CivicSyncUtils.escapeHtml(o)}</li>`)
+          .join('');
+        document.getElementById('briefing-signals').innerHTML = response.priority_signals
+          .map((s) => `<li>${CivicSyncUtils.escapeHtml(s)}</li>`)
+          .join('');
+        document.getElementById('briefing-considerations').innerHTML = response.considerations
+          .map((c) => `<li>${CivicSyncUtils.escapeHtml(c)}</li>`)
+          .join('');
+        resultPanel.hidden = false;
+      } else {
+        errorEl.hidden = false;
+        errorEl.textContent =
+          response.error || 'AI operational briefing is unavailable right now.';
+      }
+    } catch (err) {
+      errorEl.hidden = false;
+      errorEl.textContent = err.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Generate Operational Briefing';
     }
   });
 

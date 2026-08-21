@@ -299,6 +299,44 @@
             <h1 class="type-headline-md">Civic Intelligence</h1>
             <p>Grounded, deterministic insights computed from real operational data. Nothing here is fabricated — an insight only appears when the underlying data supports it.</p>
           </div>
+        </div>
+
+        <div class="card" style="margin-bottom: var(--space-lg);">
+          <div class="card__header">
+            <h2 class="type-headline-sm">Operational Briefing</h2>
+            <p class="type-body-sm text-muted" style="margin-top: 4px;">
+              AI-synthesized situational summary for the current jurisdiction, generated fresh on demand and never stored.
+            </p>
+          </div>
+          <div class="card__body">
+            <div class="action-row mb-sm">
+              <div class="filter-field">
+                <label for="briefing-department-select">Department</label>
+                <select id="briefing-department-select"><option value="">All departments</option></select>
+              </div>
+              <button class="btn btn-primary" id="generate-briefing-btn">Generate Operational Briefing</button>
+            </div>
+
+            <div id="briefing-result" class="ai-advisory-panel" hidden>
+              <span class="ai-advisory-panel__badge">🤖 AI Operational Briefing — Advisory Only</span>
+              <p id="briefing-text" class="mt-sm"></p>
+              <div class="mt-sm">
+                <p class="type-label" style="color: rgba(255,255,255,0.7); margin-bottom: 4px;">Key Observations</p>
+                <ul id="briefing-observations" style="margin: 0 0 12px 18px; padding: 0; font-size: var(--body-sm-size);"></ul>
+                <p class="type-label" style="color: rgba(255,255,255,0.7); margin-bottom: 4px;">Priority Signals</p>
+                <ul id="briefing-signals" style="margin: 0 0 12px 18px; padding: 0; font-size: var(--body-sm-size);"></ul>
+                <p class="type-label" style="color: rgba(255,255,255,0.7); margin-bottom: 4px;">Considerations</p>
+                <ul id="briefing-considerations" style="margin: 0 0 0 18px; padding: 0; font-size: var(--body-sm-size);"></ul>
+              </div>
+            </div>
+            <div id="briefing-error" class="notice notice-info" hidden></div>
+          </div>
+        </div>
+
+        <div class="admin-view-header">
+          <div>
+            <h2 class="type-headline-sm">Priority Advisory</h2>
+          </div>
           <button class="btn btn-primary" id="get-ai-advisory">Get AI Advisory</button>
         </div>
 

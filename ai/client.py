@@ -16,9 +16,11 @@ from google.genai import types
 
 from ai.prompts import (
     EXPLANATION_SYSTEM_PROMPT,
+    OPERATIONAL_BRIEFING_SYSTEM_PROMPT,
     PRIORITIZATION_SYSTEM_PROMPT,
     SYSTEM_PROMPT,
     build_explanation_prompt,
+    build_operational_briefing_prompt,
     build_prioritization_prompt,
     build_user_prompt,
 )
@@ -27,6 +29,7 @@ from ai.schemas import (
     GeminiCivicIssueSchema,
     InsightPrioritizationOutput,
     IssueExplanationOutput,
+    OperationalBriefingOutput,
 )
 
 # Current working Gemini model for this project. Do not change without
@@ -217,3 +220,61 @@ def generate_issue_explanation(issue_context: dict) -> IssueExplanationOutput:
         raise ValueError("Gemini returned an empty response.")
 
     return IssueExplanationOutput.model_validate_json(response.text)
+
+
+def generate_operational_briefing(payload: dict) -> OperationalBriefingOutput:
+    """Ask Gemini to synthesize a short operational briefing from a
+    jurisdiction-scoped (and optionally department-scoped) set of
+    currently active issues.
+
+    A separate capability from analyze_complaint() (new-complaint
+    extraction), generate_insight_prioritization() (aggregate-insight
+    reasoning), and generate_issue_explanation() (single-issue
+    explanation) above, but deliberately reuses the same client plumbing
+    (_get_client(), GEMINI_MODEL) rather than standing up a second AI
+    client.
+
+    `payload` must contain only structured/aggregate fields
+    (jurisdiction_code, department_code, total_active_issues, and a list
+    of issues each with only category/severity/status/department) --
+    never original_text, public_id, or citizen-identifying data. Gemini's
+    role is strictly advisory: it synthesizes and observes patterns in
+    what it's given, and never changes any Issue, assignment, or status
+    (see OPERATIONAL_BRIEFING_SYSTEM_PROMPT).
+
+    Args:
+        payload: A plain dict of jurisdiction/department scope plus the
+            structured active-issue list.
+
+    Returns:
+        A validated OperationalBriefingOutput instance.
+
+    Raises:
+        ValueError: if payload is empty, or Gemini returns an empty
+            response.
+        EnvironmentError: if GEMINI_API_KEY is not configured.
+    """
+    if not payload:
+        raise ValueError("payload must not be empty.")
+
+    client = _get_client()
+
+    response = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=build_operational_briefing_prompt(payload),
+        config=types.GenerateContentConfig(
+            system_instruction=OPERATIONAL_BRIEFING_SYSTEM_PROMPT,
+            response_mime_type="application/json",
+            response_schema=OperationalBriefingOutput,
+            temperature=0.1,
+        ),
+    )
+
+    parsed = getattr(response, "parsed", None)
+    if isinstance(parsed, OperationalBriefingOutput):
+        return parsed
+
+    if not response.text:
+        raise ValueError("Gemini returned an empty response.")
+
+    return OperationalBriefingOutput.model_validate_json(response.text)

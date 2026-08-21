@@ -323,6 +323,40 @@ def get_jurisdiction_subtree_department_ids(
     return department_ids
 
 
+def get_active_issues_for_briefing(
+    db: Session, *, jurisdiction_code: str, department_code: str | None = None
+) -> list[Issue] | None:
+    """Currently active (non-terminal) issues scoped to a jurisdiction's
+    subtree, optionally further narrowed to a single department --
+    Milestone 15's "AI Operational Briefing" data source.
+
+    Reuses get_jurisdiction_subtree_department_ids for jurisdiction
+    resolution (no jurisdiction logic duplicated) and the same
+    OPERATIONAL_STATUSES / severity-priority ordering already used by
+    get_operational_queue above. Returns None if jurisdiction_code
+    doesn't match any real jurisdiction (caller maps that to 404).
+
+    If department_code is given but doesn't belong to this jurisdiction's
+    subtree, the combined filter naturally yields an empty list (not an
+    error) -- exactly the same safe compose-by-AND behavior already
+    established for the M14 list/queue/stale endpoints.
+    """
+    department_ids = get_jurisdiction_subtree_department_ids(db, jurisdiction_code)
+    if department_ids is None:
+        return None
+
+    query = (
+        db.query(Issue)
+        .options(joinedload(Issue.assigned_department))
+        .filter(Issue.assigned_department_id.in_(department_ids))
+        .filter(Issue.status.in_(OPERATIONAL_STATUSES))
+    )
+    if department_code is not None:
+        query = query.filter(Issue.assigned_department.has(Department.code == department_code))
+
+    return query.order_by(_SEVERITY_PRIORITY_CASE.asc(), Issue.updated_at.asc()).all()
+
+
 def list_issues_for_admin(
     db: Session,
     *,

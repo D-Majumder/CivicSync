@@ -628,3 +628,27 @@ class IssueExplanationResponse(BaseModel):
     explanation: str | None
     considerations: list[str]
     error: str | None = None
+
+
+# --- AI Operational Briefing (Milestone 15) -----------------------------------
+
+
+class OperationalBriefingResponse(BaseModel):
+    """Response for POST /api/admin/analytics/operational-briefing.
+
+    Never persisted -- generated fresh on every request from the
+    jurisdiction-scoped (and optionally department-scoped) set of
+    currently active issues, and discarded once returned.
+    `briefing`/`key_observations`/`priority_signals`/`considerations` are
+    empty/null if Gemini was unavailable, failed, or there was nothing in
+    scope to brief on; in that case `error` carries a sanitized (never
+    raw-exception) message. This endpoint never changes any issue in any
+    way regardless of outcome -- see
+    backend/service.py's get_operational_briefing.
+    """
+
+    briefing: str | None
+    key_observations: list[str]
+    priority_signals: list[str]
+    considerations: list[str]
+    error: str | None = None
