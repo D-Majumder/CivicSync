@@ -101,6 +101,15 @@ async function request(path, options = {}) {
   );
 }
 
+/** Build a query string from a params object, omitting null/undefined/''. */
+function toQueryString(params) {
+  const usable = Object.entries(params || {}).filter(
+    ([, v]) => v !== null && v !== undefined && v !== ''
+  );
+  if (usable.length === 0) return '';
+  return '?' + usable.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
+}
+
 const CivicSyncApi = {
   ApiError,
 
@@ -122,14 +131,112 @@ const CivicSyncApi = {
     return request(`/api/track/${encodeURIComponent(publicId)}`, { method: 'GET' });
   },
 
-  /** Active department registry, for the citizen-facing trust panel. */
+  /** Active department registry. */
   getDepartments() {
     return request('/api/departments', { method: 'GET' });
   },
 
-  /** Real aggregate counts for the authority placeholder page. */
+  /** Real aggregate counts (by_status/by_severity/by_department). */
   getDashboardSummary() {
     return request('/api/admin/dashboard/summary', { method: 'GET' });
+  },
+
+  // --- Milestone 12: Authority Command Center ---------------------------------
+
+  /**
+   * Filtered/sorted/paginated issue list. `filters` may include any of:
+   * status, department_code, severity, category, sort_by, sort_order,
+   * limit, offset -- all forwarded to GET /api/admin/issues as query
+   * params, matching the backend's own filter/sort contract exactly (see
+   * backend/main.py's list_admin_issues_route).
+   */
+  listAdminIssues(filters) {
+    return request(`/api/admin/issues${toQueryString(filters)}`, { method: 'GET' });
+  },
+
+  /** Stale/aging issues. filters: older_than_hours, department_code, status, limit, offset. */
+  getStaleIssues(filters) {
+    return request(`/api/admin/issues/stale${toQueryString(filters)}`, { method: 'GET' });
+  },
+
+  /** Full authority-facing issue detail, including status/assignment history. */
+  getAdminIssueDetail(publicId) {
+    return request(`/api/admin/issues/${encodeURIComponent(publicId)}`, { method: 'GET' });
+  },
+
+  /** Operational queue (excludes CLOSED/REJECTED). filters: department_code, severity, limit, offset. */
+  getOperationalQueue(filters) {
+    return request(`/api/admin/queue${toQueryString(filters)}`, { method: 'GET' });
+  },
+
+  /** Per-department operational summary (status/severity breakdown, active/resolved/closed). */
+  getDepartmentSummary(departmentCode) {
+    return request(`/api/admin/departments/${encodeURIComponent(departmentCode)}/summary`, {
+      method: 'GET',
+    });
+  },
+
+  /** Ordered status funnel (same counts as dashboard summary, list-shaped). */
+  getFunnel() {
+    return request('/api/admin/analytics/funnel', { method: 'GET' });
+  },
+
+  /** Severity breakdown with percentages. */
+  getSeverityDistribution() {
+    return request('/api/admin/analytics/severity-distribution', { method: 'GET' });
+  },
+
+  /** Status breakdown for every active department, one call. */
+  getDepartmentWorkload() {
+    return request('/api/admin/analytics/department-workload', { method: 'GET' });
+  },
+
+  /** Age-since-created_at distribution for active issues (neutral buckets, not SLA). */
+  getAgingBuckets() {
+    return request('/api/admin/analytics/aging', { method: 'GET' });
+  },
+
+  /** Most recent status-transition events, system-wide. */
+  getRecentActivity(limit) {
+    return request(`/api/admin/analytics/recent-activity${toQueryString({ limit })}`, {
+      method: 'GET',
+    });
+  },
+
+  /** Grounded, deterministic civic insights. Never calls Gemini. */
+  getInsights() {
+    return request('/api/admin/insights', { method: 'GET' });
+  },
+
+  /** AI-assisted prioritization over the same grounded insights (advisory only). */
+  prioritizeInsights() {
+    return request('/api/admin/insights/prioritize', { method: 'POST' });
+  },
+
+  /**
+   * Officially assign/reassign an issue to a department. This is the
+   * ONLY assignment endpoint -- never derived from the AI's
+   * suggested_department. May also advance the lifecycle (CLASSIFIED ->
+   * ROUTED) as a side effect of the backend's own atomic assignment logic.
+   */
+  assignDepartment(publicId, departmentCode, reason) {
+    return request(`/api/issues/${encodeURIComponent(publicId)}/assignment`, {
+      method: 'POST',
+      body: JSON.stringify({ department_code: departmentCode, reason: reason || null }),
+    });
+  },
+
+  /**
+   * Transition an issue's status. The backend (backend/transitions.py) is
+   * the sole authority on whether a transition is valid -- this call can
+   * fail with a 400 even if the frontend believed the transition looked
+   * valid.
+   */
+  transitionStatus(publicId, newStatus, reason) {
+    return request(`/api/issues/${encodeURIComponent(publicId)}/status`, {
+      method: 'POST',
+      body: JSON.stringify({ status: newStatus, reason: reason || null }),
+    });
   },
 };
 

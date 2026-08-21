@@ -61,6 +61,27 @@ const CivicSyncUtils = {
     }
   },
 
+  /** InsightPriority value (e.g. "high") -> chip CSS class */
+  insightPriorityChipClass(priority) {
+    const key = (priority || '').toLowerCase();
+    if (key === 'high') return 'chip-error';
+    if (key === 'medium') return 'chip-warning';
+    return 'chip-neutral'; // low
+  },
+
+  /** IssueStatus value (e.g. "IN_PROGRESS") -> "In Progress". Mirrors
+   * backend/service.py's _status_label() exactly, for the few places the
+   * API doesn't already supply status_label (history rows, lifecycle
+   * action buttons). Prefer the API's own status_label field when it's
+   * present in the response. */
+  statusLabel(status) {
+    if (!status) return '';
+    return status
+      .split('_')
+      .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
+      .join(' ');
+  },
+
   /** Basic client-side shape check, mirrors backend PUBLIC_ID_PATTERN
    * (CIV- + 12 uppercase hex chars). Purely for fast UX feedback --
    * the backend's own validation is always the source of truth. */

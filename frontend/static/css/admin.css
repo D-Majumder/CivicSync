@@ -1,0 +1,552 @@
+/* ============================================================================
+   Authority Command Center components (Milestone 12)
+   Built entirely on the existing tokens.css/components.css design system --
+   no new colors/typography/spacing scale introduced.
+   ============================================================================ */
+
+/* --- View switching (Dashboard / Queue / Issues / Stale / Departments / Intel) */
+
+.admin-view {
+  display: none;
+}
+.admin-view.is-active {
+  display: block;
+}
+
+.admin-view-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+
+.admin-view-header p {
+  color: var(--color-on-surface-variant);
+  margin-top: 4px;
+}
+
+.admin-section {
+  margin-bottom: var(--space-xl);
+}
+
+.admin-section-title {
+  margin-bottom: var(--space-md);
+}
+
+/* --- Filter bar --------------------------------------------------------------- */
+
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-md);
+  background: #ffffff;
+  border: 1px solid var(--color-card-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+  margin-bottom: var(--space-md);
+}
+
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+}
+
+.filter-field label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-on-surface-variant);
+}
+
+.filter-field select,
+.filter-field input {
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-default);
+  padding: 6px var(--space-sm);
+  font-size: var(--body-sm-size);
+  background: #ffffff;
+  color: var(--color-on-surface);
+}
+
+.filter-field select:focus,
+.filter-field input:focus {
+  outline: none;
+  border-color: var(--color-action);
+}
+
+/* --- Data table ---------------------------------------------------------------- */
+
+.data-table-wrap {
+  background: #ffffff;
+  border: 1px solid var(--color-card-border);
+  border-radius: var(--radius-lg);
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--body-sm-size);
+}
+
+.data-table thead th {
+  text-align: left;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-surface-container-low);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-on-surface-variant);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--color-card-border);
+}
+
+.data-table tbody td {
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--color-card-header-border);
+  vertical-align: middle;
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table tbody tr.is-clickable {
+  cursor: pointer;
+}
+.data-table tbody tr.is-clickable:hover {
+  background: var(--color-surface-container-low);
+}
+
+.data-table .cell-id {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table .cell-muted {
+  color: var(--color-on-surface-variant);
+}
+
+.table-empty-state {
+  padding: var(--space-xl);
+  text-align: center;
+  color: var(--color-on-surface-variant);
+}
+
+/* --- Pagination ------------------------------------------------------------------ */
+
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border-top: 1px solid var(--color-card-header-border);
+  font-size: var(--body-sm-size);
+  color: var(--color-on-surface-variant);
+}
+
+.pagination-bar .btn {
+  padding: 4px var(--space-sm);
+}
+
+/* --- Bar visualizations (funnel / severity / aging) -------------------------------- */
+
+.bar-viz {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.bar-viz__row {
+  display: grid;
+  grid-template-columns: 120px 1fr 48px;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--body-sm-size);
+}
+
+.bar-viz__label {
+  color: var(--color-on-surface-variant);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar-viz__track {
+  height: 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-container);
+  overflow: hidden;
+}
+
+.bar-viz__fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--color-action);
+  transition: width 0.3s ease;
+}
+
+.bar-viz__fill.sev-critical { background: #ba1a1a; }
+.bar-viz__fill.sev-high { background: #c25a00; }
+.bar-viz__fill.sev-medium { background: #9a6700; }
+.bar-viz__fill.sev-low { background: #1e7a34; }
+.bar-viz__fill.sev-unknown { background: var(--color-outline); }
+
+.bar-viz__count {
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Department cards ---------------------------------------------------------------- */
+
+.department-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-md);
+}
+
+.department-card {
+  background: #ffffff;
+  border: 1px solid var(--color-card-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+.department-card:hover {
+  border-color: var(--color-action);
+}
+
+.department-card__name {
+  font-weight: 600;
+  margin-bottom: var(--space-sm);
+}
+
+.department-card__stats {
+  display: flex;
+  gap: var(--space-md);
+  font-size: var(--body-sm-size);
+  color: var(--color-on-surface-variant);
+}
+
+.department-card__stats strong {
+  color: var(--color-on-surface);
+  display: block;
+  font-size: 20px;
+}
+
+/* --- Insight cards ---------------------------------------------------------------- */
+
+.insight-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.insight-card {
+  background: #ffffff;
+  border: 1px solid var(--color-card-border);
+  border-left: 3px solid var(--color-outline-variant);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+}
+.insight-card.priority-high { border-left-color: #ba1a1a; }
+.insight-card.priority-medium { border-left-color: #9a6700; }
+.insight-card.priority-low { border-left-color: #1e7a34; }
+
+.insight-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+
+.insight-card__title {
+  font-weight: 600;
+  font-size: var(--body-md-size);
+}
+
+.insight-card__summary {
+  color: var(--color-on-surface-variant);
+  font-size: var(--body-sm-size);
+  margin-bottom: var(--space-sm);
+}
+
+.insight-card__evidence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: var(--space-sm);
+}
+
+.insight-card__evidence-item {
+  background: var(--color-surface-container-low);
+  border-radius: var(--radius-default);
+  padding: 2px var(--space-sm);
+  font-size: 12px;
+  color: var(--color-on-surface-variant);
+  font-variant-numeric: tabular-nums;
+}
+
+.insight-card__action {
+  font-size: var(--body-sm-size);
+  font-style: italic;
+  color: var(--color-on-surface-variant);
+}
+
+.ai-advisory-panel {
+  background: var(--color-primary);
+  color: var(--color-inverse-on-surface);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+  margin-bottom: var(--space-md);
+}
+
+.ai-advisory-panel__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-full);
+  padding: 2px var(--space-sm);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: var(--space-sm);
+}
+
+.ai-advisory-panel p {
+  font-size: var(--body-sm-size);
+  opacity: 0.92;
+}
+
+.ai-advisory-panel__order {
+  margin-top: var(--space-sm);
+  padding-left: var(--space-md);
+  font-size: var(--body-sm-size);
+}
+
+/* --- Modal (issue detail drawer) ---------------------------------------------------- */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 28, 48, 0.5);
+  display: flex;
+  justify-content: flex-end;
+  z-index: 100;
+}
+.modal-overlay[hidden] {
+  display: none;
+}
+
+.modal-panel {
+  background: var(--color-background);
+  width: min(720px, 100%);
+  height: 100%;
+  overflow-y: auto;
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.15);
+}
+
+.modal-panel__header {
+  position: sticky;
+  top: 0;
+  background: #ffffff;
+  border-bottom: 1px solid var(--color-card-border);
+  padding: var(--space-md) var(--space-lg);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+  z-index: 1;
+}
+
+.modal-panel__close {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--color-on-surface-variant);
+  padding: 4px 8px;
+}
+.modal-panel__close:hover {
+  color: var(--color-on-surface);
+}
+
+.modal-panel__body {
+  padding: var(--space-lg);
+}
+
+.detail-section {
+  margin-bottom: var(--space-lg);
+}
+
+.detail-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: var(--space-sm);
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-md);
+}
+
+.detail-grid dt {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-on-surface-variant);
+  margin-bottom: 2px;
+}
+
+.detail-grid dd {
+  margin: 0;
+  font-size: var(--body-sm-size);
+}
+
+/* Visually distinguish "AI suggestion" content from "official" content --
+   critical per M12's explicit requirement. AI content sits on a tinted
+   dashed panel; official content sits on plain white with a solid
+   primary-colored left border. */
+.ai-panel {
+  background: var(--color-surface-container-low);
+  border: 1px dashed var(--color-outline-variant);
+  border-radius: var(--radius-default);
+  padding: var(--space-md);
+}
+
+.ai-panel__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-on-surface-variant);
+  margin-bottom: var(--space-sm);
+}
+
+.official-panel {
+  background: #ffffff;
+  border: 1px solid var(--color-card-border);
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-default);
+  padding: var(--space-md);
+}
+
+.official-panel__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-primary);
+  margin-bottom: var(--space-sm);
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.history-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid var(--color-card-header-border);
+  font-size: var(--body-sm-size);
+}
+.history-row:last-child {
+  border-bottom: none;
+}
+
+.history-row__meta {
+  color: var(--color-on-surface-variant);
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* --- Action forms (assignment / lifecycle) inside the modal ------------------------- */
+
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  align-items: flex-end;
+}
+
+.action-row .filter-field {
+  min-width: 180px;
+  flex: 1;
+}
+
+.transition-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.action-feedback {
+  margin-top: var(--space-sm);
+  font-size: var(--body-sm-size);
+}
+.action-feedback.is-success { color: var(--color-success); }
+.action-feedback.is-error { color: var(--color-error); }
+
+/* --- Small helpers ------------------------------------------------------------------- */
+
+.text-muted {
+  color: var(--color-on-surface-variant);
+}
+
+.mt-sm { margin-top: var(--space-sm); }
+.mt-md { margin-top: var(--space-md); }
+.mb-sm { margin-bottom: var(--space-sm); }
+
+/* Responsive 2-column dashboard grid. Mobile-first: 1 column by default,
+   2 columns only once there's room -- unlike an inline
+   `grid-template-columns: 1fr 1fr`, which (via CSS specificity) would
+   override pages.css's own responsive .flow-grid behavior and force 2
+   cramped columns even on a 375px phone. This was a real bug caught via
+   browser testing at mobile width and fixed here. */
+.dashboard-grid-2col {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-lg);
+  margin-bottom: var(--space-lg);
+}
+@media (min-width: 700px) {
+  .dashboard-grid-2col {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .modal-panel {
+    width: 100%;
+  }
+  .bar-viz__row {
+    grid-template-columns: 90px 1fr 36px;
+  }
+}

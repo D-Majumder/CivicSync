@@ -434,13 +434,14 @@
   }
   .authority-sidebar {
     width: 100%;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
+    flex-direction: column;
+    align-items: stretch;
     padding: var(--space-sm) var(--space-md);
+    gap: var(--space-sm);
   }
   .authority-nav {
     flex-direction: row;
+    flex-wrap: wrap;
   }
 }
 

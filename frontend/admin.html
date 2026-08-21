@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/static/css/tokens.css" />
   <link rel="stylesheet" href="/static/css/components.css" />
   <link rel="stylesheet" href="/static/css/pages.css" />
+  <link rel="stylesheet" href="/static/css/admin.css" />
 </head>
 <body>
   <div class="authority-shell">
@@ -16,44 +17,310 @@
         <img src="/static/assets/logo.png" alt="CivicSync" />
         <span>CivicSync</span>
       </a>
-      <nav class="authority-nav" aria-label="Authority">
-        <a href="/admin" class="active">Dashboard</a>
-        <a href="#" aria-disabled="true" title="Coming in a future milestone">Issue Queue</a>
-        <a href="#" aria-disabled="true" title="Coming in a future milestone">Civic Intelligence</a>
-        <a href="#" aria-disabled="true" title="Coming in a future milestone">Settings</a>
+      <nav class="authority-nav" aria-label="Authority" id="authority-nav">
+        <a href="#dashboard" data-view="dashboard" class="active">Dashboard</a>
+        <a href="#queue" data-view="queue">Issue Queue</a>
+        <a href="#issues" data-view="issues">All Issues</a>
+        <a href="#stale" data-view="stale">Stale Issues</a>
+        <a href="#departments" data-view="departments">Departments</a>
+        <a href="#intelligence" data-view="intelligence">Civic Intelligence</a>
       </nav>
+      <p class="type-body-sm" style="color: #8b96ab; margin-top: auto;">
+        Internal prototype — not authenticated. Do not expose publicly.
+      </p>
     </aside>
 
     <main class="authority-main">
-      <div class="container" style="padding: 0;">
-        <h1 class="type-headline-md" style="margin-bottom: 4px;">Command Center</h1>
-        <p style="color: var(--color-on-surface-variant); margin-bottom: var(--space-lg);">
-          Foundation for the authority dashboard — expanded in a later milestone. The figures
-          below are live from CivicSync's own data.
-        </p>
+      <div id="admin-global-error" class="notice notice-error" hidden style="margin-bottom: var(--space-lg);"></div>
 
-        <div id="admin-error" class="notice notice-error" hidden style="margin-bottom: var(--space-lg);"></div>
+      <!-- ===================== DASHBOARD ===================== -->
+      <section id="view-dashboard" class="admin-view is-active">
+        <div class="admin-view-header">
+          <div>
+            <h1 class="type-headline-md">Command Center</h1>
+            <p>Live operational overview, computed directly from CivicSync's own data.</p>
+          </div>
+          <button class="btn btn-secondary" id="dashboard-refresh">Refresh</button>
+        </div>
 
-        <div class="kpi-grid">
+        <div class="kpi-grid mb-sm" style="margin-bottom: var(--space-lg);">
           <div class="kpi-card">
             <div class="kpi-card__label">Total Issues</div>
             <div class="kpi-card__value" id="kpi-total">—</div>
           </div>
           <div class="kpi-card">
-            <div class="kpi-card__label">Submitted</div>
-            <div class="kpi-card__value" id="kpi-submitted">—</div>
+            <div class="kpi-card__label">Active</div>
+            <div class="kpi-card__value" id="kpi-active">—</div>
           </div>
           <div class="kpi-card">
-            <div class="kpi-card__label">In Progress</div>
-            <div class="kpi-card__value" id="kpi-in-progress">—</div>
+            <div class="kpi-card__label">Resolved / Closed</div>
+            <div class="kpi-card__value" id="kpi-resolved-closed">—</div>
           </div>
           <div class="kpi-card">
-            <div class="kpi-card__label">Resolved</div>
-            <div class="kpi-card__value" id="kpi-resolved">—</div>
+            <div class="kpi-card__label">High / Critical Active</div>
+            <div class="kpi-card__value" id="kpi-high-critical">—</div>
           </div>
         </div>
-      </div>
+
+        <div class="dashboard-grid-2col">
+          <div class="card">
+            <div class="card__header"><h2 class="type-headline-sm">Status Funnel</h2></div>
+            <div class="card__body">
+              <div class="bar-viz" id="funnel-viz"><div class="skeleton" style="height: 120px;"></div></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card__header"><h2 class="type-headline-sm">Severity Distribution</h2></div>
+            <div class="card__body">
+              <div class="bar-viz" id="severity-viz"><div class="skeleton" style="height: 120px;"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="dashboard-grid-2col">
+          <div class="card">
+            <div class="card__header"><h2 class="type-headline-sm">Department Workload</h2></div>
+            <div class="card__body">
+              <div class="bar-viz" id="dept-workload-viz"><div class="skeleton" style="height: 120px;"></div></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card__header"><h2 class="type-headline-sm">Aging (Active Issues)</h2></div>
+            <div class="card__body">
+              <div class="bar-viz" id="aging-viz"><div class="skeleton" style="height: 120px;"></div></div>
+              <p class="type-body-sm text-muted mt-sm">Time since submission. Not an SLA — CivicSync does not define deadlines.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card__header"><h2 class="type-headline-sm">Recent Activity</h2></div>
+          <div class="card__body">
+            <div class="history-list" id="recent-activity-list">
+              <div class="skeleton" style="height: 80px;"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== ISSUE QUEUE ===================== -->
+      <section id="view-queue" class="admin-view">
+        <div class="admin-view-header">
+          <div>
+            <h1 class="type-headline-md">Issue Queue</h1>
+            <p>Issues requiring operational attention, ordered by severity then oldest updated first. Excludes closed/rejected issues.</p>
+          </div>
+        </div>
+        <div class="filter-bar">
+          <div class="filter-field">
+            <label for="queue-filter-department">Department</label>
+            <select id="queue-filter-department"><option value="">All</option></select>
+          </div>
+          <div class="filter-field">
+            <label for="queue-filter-severity">Severity</label>
+            <select id="queue-filter-severity">
+              <option value="">All</option>
+              <option>Critical</option><option>High</option><option>Medium</option><option>Low</option><option>Unknown</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" id="queue-apply-filters">Apply</button>
+        </div>
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Public ID</th><th>Category</th><th>Severity</th><th>Status</th>
+                <th>Assigned Department</th><th>Last Updated (IST)</th>
+              </tr>
+            </thead>
+            <tbody id="queue-table-body"></tbody>
+          </table>
+          <div class="pagination-bar">
+            <span id="queue-pagination-summary"></span>
+            <span>
+              <button class="btn btn-secondary" id="queue-prev">Previous</button>
+              <button class="btn btn-secondary" id="queue-next">Next</button>
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== ALL ISSUES ===================== -->
+      <section id="view-issues" class="admin-view">
+        <div class="admin-view-header">
+          <div>
+            <h1 class="type-headline-md">All Issues</h1>
+            <p>Search, filter, and sort every issue in the system.</p>
+          </div>
+        </div>
+        <div class="filter-bar">
+          <div class="filter-field">
+            <label for="issues-filter-status">Status</label>
+            <select id="issues-filter-status"><option value="">All</option></select>
+          </div>
+          <div class="filter-field">
+            <label for="issues-filter-department">Department</label>
+            <select id="issues-filter-department"><option value="">All</option></select>
+          </div>
+          <div class="filter-field">
+            <label for="issues-filter-severity">Severity</label>
+            <select id="issues-filter-severity">
+              <option value="">All</option>
+              <option>Critical</option><option>High</option><option>Medium</option><option>Low</option><option>Unknown</option>
+            </select>
+          </div>
+          <div class="filter-field">
+            <label for="issues-filter-category">Category</label>
+            <select id="issues-filter-category"><option value="">All</option></select>
+          </div>
+          <div class="filter-field">
+            <label for="issues-sort-by">Sort By</label>
+            <select id="issues-sort-by">
+              <option value="updated_at">Last Updated</option>
+              <option value="created_at">Created</option>
+              <option value="severity">Severity</option>
+            </select>
+          </div>
+          <div class="filter-field">
+            <label for="issues-sort-order">Order</label>
+            <select id="issues-sort-order">
+              <option value="desc">Descending</option>
+              <option value="asc">Ascending</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" id="issues-apply-filters">Apply</button>
+        </div>
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Public ID</th><th>Category</th><th>Severity</th><th>Status</th>
+                <th>Assigned Department</th><th>Last Updated (IST)</th>
+              </tr>
+            </thead>
+            <tbody id="issues-table-body"></tbody>
+          </table>
+          <div class="pagination-bar">
+            <span id="issues-pagination-summary"></span>
+            <span>
+              <button class="btn btn-secondary" id="issues-prev">Previous</button>
+              <button class="btn btn-secondary" id="issues-next">Next</button>
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== STALE ISSUES ===================== -->
+      <section id="view-stale" class="admin-view">
+        <div class="admin-view-header">
+          <div>
+            <h1 class="type-headline-md">Stale Issues</h1>
+            <p>Issues whose status hasn't changed recently. This is a simple "hasn't updated in N hours" check — CivicSync does not define SLA deadlines or mark anything "overdue."</p>
+          </div>
+        </div>
+        <div class="filter-bar">
+          <div class="filter-field">
+            <label for="stale-filter-hours">Older Than (hours)</label>
+            <input type="number" id="stale-filter-hours" value="48" min="1" />
+          </div>
+          <div class="filter-field">
+            <label for="stale-filter-department">Department</label>
+            <select id="stale-filter-department"><option value="">All</option></select>
+          </div>
+          <div class="filter-field">
+            <label for="stale-filter-status">Status</label>
+            <select id="stale-filter-status"><option value="">All</option></select>
+          </div>
+          <button class="btn btn-primary" id="stale-apply-filters">Apply</button>
+        </div>
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Public ID</th><th>Category</th><th>Severity</th><th>Status</th>
+                <th>Assigned Department</th><th>Last Updated (IST)</th>
+              </tr>
+            </thead>
+            <tbody id="stale-table-body"></tbody>
+          </table>
+          <div class="pagination-bar">
+            <span id="stale-pagination-summary"></span>
+            <span>
+              <button class="btn btn-secondary" id="stale-prev">Previous</button>
+              <button class="btn btn-secondary" id="stale-next">Next</button>
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== DEPARTMENTS ===================== -->
+      <section id="view-departments" class="admin-view">
+        <div class="admin-view-header">
+          <div>
+            <h1 class="type-headline-md">Departments</h1>
+            <p>Workload by civic department. Click a department for a detailed breakdown.</p>
+          </div>
+        </div>
+        <div class="department-grid" id="department-grid">
+          <div class="skeleton" style="height: 100px;"></div>
+        </div>
+
+        <div class="card mt-md" id="department-detail-card" hidden>
+          <div class="card__header">
+            <h2 class="type-headline-sm" id="department-detail-name"></h2>
+          </div>
+          <div class="card__body">
+            <div class="detail-grid mb-sm">
+              <div><dt class="type-label">Total Assigned</dt><dd id="dept-detail-total"></dd></div>
+              <div><dt class="type-label">Active</dt><dd id="dept-detail-active"></dd></div>
+              <div><dt class="type-label">Resolved</dt><dd id="dept-detail-resolved"></dd></div>
+              <div><dt class="type-label">Closed</dt><dd id="dept-detail-closed"></dd></div>
+            </div>
+            <h3 class="type-headline-sm mb-sm" style="font-size: 16px;">Status Breakdown</h3>
+            <div class="bar-viz" id="dept-detail-status-viz"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== CIVIC INTELLIGENCE ===================== -->
+      <section id="view-intelligence" class="admin-view">
+        <div class="admin-view-header">
+          <div>
+            <h1 class="type-headline-md">Civic Intelligence</h1>
+            <p>Grounded, deterministic insights computed from real operational data. Nothing here is fabricated — an insight only appears when the underlying data supports it.</p>
+          </div>
+          <button class="btn btn-primary" id="get-ai-advisory">Get AI Advisory</button>
+        </div>
+
+        <div id="ai-advisory-panel" class="ai-advisory-panel" hidden>
+          <span class="ai-advisory-panel__badge">🤖 AI Advisory — Not an Official Decision</span>
+          <p id="ai-advisory-summary"></p>
+          <p id="ai-advisory-explanation" class="mt-sm"></p>
+          <ol class="ai-advisory-panel__order" id="ai-advisory-order"></ol>
+        </div>
+        <div id="ai-advisory-error" class="notice notice-info mb-sm" hidden></div>
+
+        <div class="insight-list" id="insight-list">
+          <div class="skeleton" style="height: 100px;"></div>
+        </div>
+      </section>
     </main>
+  </div>
+
+  <!-- ===================== ISSUE DETAIL MODAL ===================== -->
+  <div class="modal-overlay" id="issue-modal-overlay" hidden>
+    <div class="modal-panel">
+      <div class="modal-panel__header">
+        <div>
+          <p class="type-body-sm text-muted" id="modal-public-id"></p>
+          <h2 class="type-headline-sm" id="modal-category"></h2>
+        </div>
+        <button class="modal-panel__close" id="modal-close" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-panel__body" id="modal-body">
+        <div class="skeleton" style="height: 300px;"></div>
+      </div>
+    </div>
   </div>
 
   <script src="/static/js/config.js"></script>
