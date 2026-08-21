@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CivicSync — Report a Civic Issue</title>
+  <meta name="description" content="Report civic issues to your local authority. AI-classified, tracked from submission to resolution." />
+  <link rel="icon" href="/static/assets/logo.png" />
+  <link rel="stylesheet" href="/static/css/tokens.css" />
+  <link rel="stylesheet" href="/static/css/components.css" />
+  <link rel="stylesheet" href="/static/css/pages.css" />
+</head>
+<body>
+  <div class="page-shell">
+    <header class="site-header">
+      <div class="container site-header__inner">
+        <a href="/" class="brand">
+          <img src="/static/assets/logo.png" alt="CivicSync" />
+          <span>CivicSync</span>
+        </a>
+        <nav class="site-nav" aria-label="Primary">
+          <a href="/" aria-current="page">Report Issue</a>
+          <a href="/track">Track Status</a>
+          <a href="#" class="is-disabled" aria-disabled="true" title="Coming in a future milestone">Impact Map</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="page-main">
+      <div class="container">
+
+        <!-- ===================== SCREEN 1: Report Issue ===================== -->
+        <section id="step-form" class="flow-step is-active">
+          <div class="hero">
+            <span class="hero__eyebrow">Your City, Your Impact</span>
+            <h1 class="type-display-lg">Improve Your Community.<br />Report with Precision.</h1>
+            <p class="type-body-lg">
+              CivicSync turns your report into a structured civic record: classified by AI,
+              routed to the right department, and trackable from submission through to resolution.
+            </p>
+          </div>
+
+          <div class="flow-grid">
+            <div class="card">
+              <div class="card__header">
+                <h2 class="type-headline-sm">Submit a Report</h2>
+                <p class="type-body-sm" style="color: var(--color-on-surface-variant); margin-top: 4px;">
+                  Describe the issue in your own words — CivicSync's AI will classify it and route it
+                  to the right department.
+                </p>
+              </div>
+              <div class="card__body">
+                <form id="report-form" novalidate>
+                  <div class="field" id="complaint-field-wrap">
+                    <label for="complaint-text">Describe the issue</label>
+                    <textarea
+                      id="complaint-text"
+                      name="text"
+                      placeholder="e.g. There has been no street light near our school for two weeks."
+                      required
+                    ></textarea>
+                    <p class="field-hint">
+                      Include what's wrong, where, and how long it's been going on — the more
+                      detail you give, the better CivicSync's AI can classify and route it.
+                    </p>
+                    <p class="field-error" id="complaint-error"></p>
+                  </div>
+
+                  <div id="form-notice" class="notice notice-error" hidden></div>
+
+                  <button type="submit" class="btn btn-primary btn-block" id="submit-button">
+                    <span id="submit-button-label">Submit Report</span>
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            <aside class="info-panel">
+              <div class="card">
+                <div class="card__header"><h3 class="type-headline-sm">How it works</h3></div>
+                <div class="card__body">
+                  <p>1. Describe the issue in plain language.</p>
+                  <p>2. Gemini analyzes it — category, severity, and a suggested department.</p>
+                  <p>3. You get a public tracking ID to follow it through to resolution.</p>
+                </div>
+              </div>
+              <div class="card">
+                <div class="card__header"><h3 class="type-headline-sm">Civic Departments</h3></div>
+                <div class="card__body">
+                  <p style="margin-bottom: 8px;">Reports are routed to one of CivicSync's civic departments:</p>
+                  <ul class="department-list" id="department-list">
+                    <li>Loading…</li>
+                  </ul>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <!-- ===================== SCREEN 2: AI Analysis ===================== -->
+        <section id="step-analysis" class="flow-step">
+          <div class="card analysis-card" style="max-width: 640px; margin: 0 auto;">
+            <div class="analysis-icon" id="analysis-icon">
+              <span class="spinner spinner-dark"></span>
+            </div>
+            <h1 class="type-headline-md" id="analysis-heading">AI Analysis in Progress</h1>
+            <p class="analysis-caption" id="analysis-caption">
+              CivicSync sends your report to Gemini in a single request.
+            </p>
+
+            <div class="analysis-stage-list" id="analysis-stage-list"></div>
+
+            <div
+              id="analysis-outcome"
+              hidden
+              style="margin-top: 32px; text-align: left; border-top: 1px solid var(--color-card-header-border); padding-top: 24px;"
+            >
+              <dl class="track-meta-grid">
+                <div>
+                  <dt class="type-label">Category</dt>
+                  <dd id="analysis-category"></dd>
+                </div>
+                <div>
+                  <dt class="type-label">Severity</dt>
+                  <dd id="analysis-severity"><span class="chip"></span></dd>
+                </div>
+                <div>
+                  <dt class="type-label">AI-Suggested Department</dt>
+                  <dd id="analysis-department"></dd>
+                </div>
+              </dl>
+              <p class="field-hint" style="margin-top: 12px;">
+                This is the AI's initial read — the department that officially picks up your
+                report may differ after human review.
+              </p>
+              <button class="btn btn-primary" id="view-result-button" style="margin-top: 16px;">
+                View My Report
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===================== SCREEN 3: Submission Result ===================== -->
+        <section id="step-result" class="flow-step">
+          <div style="max-width: 640px; margin: 0 auto;">
+            <div class="result-summary">
+              <div class="result-icon">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+              </div>
+              <h1 class="type-headline-md">Report Submitted</h1>
+              <p class="type-body-md" style="color: var(--color-on-surface-variant); margin-top: 8px;">
+                Your report has been logged in CivicSync. You can track its progress at any time.
+              </p>
+            </div>
+
+            <div class="result-id-card">
+              <div class="result-id-card__block">
+                <p class="type-label">Public Tracking ID</p>
+                <p class="result-id-value" id="result-public-id">—</p>
+              </div>
+              <div class="result-id-card__block">
+                <p class="type-label">Assigned Department</p>
+                <p class="result-id-value" id="result-department" style="font-size: 16px;">—</p>
+              </div>
+              <div class="result-id-card__block">
+                <p class="type-label">Status</p>
+                <p class="result-id-value" id="result-status" style="font-size: 16px;">—</p>
+              </div>
+            </div>
+
+            <div class="result-actions">
+              <a href="#" class="btn btn-primary" id="track-button">Track Public Status</a>
+              <button class="btn btn-secondary" id="report-another-button">Report Another Issue</button>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container site-footer__inner">
+        <span>© 2026 CivicSync</span>
+        <span>AI-assisted civic accountability platform</span>
+      </div>
+    </footer>
+  </div>
+
+  <script src="/static/js/config.js"></script>
+  <script src="/static/js/utils.js"></script>
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/report.js"></script>
+</body>
+</html>

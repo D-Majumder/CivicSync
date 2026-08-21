@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CivicSync — Track Status</title>
+  <meta name="description" content="Track the status of a civic issue you reported to CivicSync." />
+  <link rel="icon" href="/static/assets/logo.png" />
+  <link rel="stylesheet" href="/static/css/tokens.css" />
+  <link rel="stylesheet" href="/static/css/components.css" />
+  <link rel="stylesheet" href="/static/css/pages.css" />
+</head>
+<body>
+  <div class="page-shell">
+    <header class="site-header">
+      <div class="container site-header__inner">
+        <a href="/" class="brand">
+          <img src="/static/assets/logo.png" alt="CivicSync" />
+          <span>CivicSync</span>
+        </a>
+        <nav class="site-nav" aria-label="Primary">
+          <a href="/">Report Issue</a>
+          <a href="/track" aria-current="page">Track Status</a>
+          <a href="#" class="is-disabled" aria-disabled="true" title="Coming in a future milestone">Impact Map</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="page-main">
+      <div class="container">
+        <div class="hero" style="margin-bottom: var(--space-lg);">
+          <h1 class="type-headline-md">Track a Report</h1>
+          <p style="color: var(--color-on-surface-variant); margin-top: 8px;">
+            Enter the public tracking ID you received when you submitted your report.
+          </p>
+        </div>
+
+        <form id="track-search-form" class="track-search">
+          <input
+            type="text"
+            id="track-search-input"
+            placeholder="CIV-XXXXXXXXXXXX"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button type="submit" class="btn btn-primary">Track</button>
+        </form>
+
+        <!-- Empty state: no id in the URL yet -->
+        <div id="track-empty" class="card state-panel" hidden>
+          <div class="state-panel__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" />
+            </svg>
+          </div>
+          <p class="type-body-md">Enter a public tracking ID above to see its status.</p>
+        </div>
+
+        <!-- Loading state -->
+        <div id="track-loading" hidden>
+          <div class="card" style="padding: var(--space-lg);">
+            <div class="skeleton" style="height: 28px; width: 60%; margin-bottom: 16px;"></div>
+            <div class="skeleton" style="height: 16px; width: 90%; margin-bottom: 8px;"></div>
+            <div class="skeleton" style="height: 16px; width: 80%;"></div>
+          </div>
+        </div>
+
+        <!-- Not found state -->
+        <div id="track-not-found" class="card state-panel" hidden>
+          <div class="state-panel__icon" style="color: var(--color-on-surface-variant);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="12" cy="12" r="10" /><path d="M9.5 9.5l5 5M14.5 9.5l-5 5" />
+            </svg>
+          </div>
+          <p class="type-body-md">
+            No report was found with the ID <strong id="track-not-found-id"></strong>.
+          </p>
+          <p class="field-hint" style="margin-top: 4px;">
+            Double-check the ID from your submission confirmation and try again.
+          </p>
+        </div>
+
+        <!-- Invalid format state -->
+        <div id="track-invalid" class="card state-panel" hidden>
+          <div class="state-panel__icon" style="color: var(--color-warning);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M12 9v4M12 17h.01" /><circle cx="12" cy="12" r="10" />
+            </svg>
+          </div>
+          <p class="type-body-md">That doesn't look like a valid CivicSync tracking ID.</p>
+          <p class="field-hint" style="margin-top: 4px;">
+            The expected format is <code class="type-body-sm">CIV-</code> followed by 12
+            uppercase letters/numbers, e.g. <code class="type-body-sm">CIV-AFFDA97DDA53</code>.
+          </p>
+        </div>
+
+        <!-- Generic error state (network / 5xx) -->
+        <div id="track-error" class="card state-panel" hidden>
+          <div class="state-panel__icon" style="color: var(--color-error);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M12 9v4M12 17h.01" /><circle cx="12" cy="12" r="10" />
+            </svg>
+          </div>
+          <p class="type-body-md" id="track-error-message">Something went wrong.</p>
+        </div>
+
+        <!-- Result state -->
+        <div id="track-result" hidden>
+          <div class="track-header">
+            <div>
+              <p class="track-header__id">Tracking ID: <strong id="track-public-id"></strong></p>
+              <h1 class="type-headline-md" id="track-category"></h1>
+            </div>
+            <span class="chip" id="track-status-chip"></span>
+          </div>
+
+          <div class="track-layout">
+            <div>
+              <div class="card" style="margin-bottom: var(--space-lg);">
+                <div class="card__header"><h2 class="type-headline-sm">Report Details</h2></div>
+                <div class="card__body">
+                  <p id="track-problem" style="margin-bottom: 16px;"></p>
+                  <dl class="track-meta-grid">
+                    <div>
+                      <dt class="type-label">Location</dt>
+                      <dd id="track-location"></dd>
+                    </div>
+                    <div>
+                      <dt class="type-label">Duration</dt>
+                      <dd id="track-duration"></dd>
+                    </div>
+                    <div>
+                      <dt class="type-label">Affected Population</dt>
+                      <dd id="track-affected"></dd>
+                    </div>
+                    <div>
+                      <dt class="type-label">Severity</dt>
+                      <dd><span class="chip" id="track-severity-chip"></span></dd>
+                    </div>
+                    <div>
+                      <dt class="type-label">Assigned Department</dt>
+                      <dd id="track-department"></dd>
+                    </div>
+                    <div>
+                      <dt class="type-label">Reported</dt>
+                      <dd id="track-created-at"></dd>
+                    </div>
+                    <div>
+                      <dt class="type-label">Last Updated</dt>
+                      <dd id="track-updated-at"></dd>
+                    </div>
+                  </dl>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card__header"><h2 class="type-headline-sm">Timeline</h2></div>
+              <div class="card__body">
+                <ul class="timeline" id="track-timeline"></ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container site-footer__inner">
+        <span>© 2026 CivicSync</span>
+        <span>AI-assisted civic accountability platform</span>
+      </div>
+    </footer>
+  </div>
+
+  <script src="/static/js/config.js"></script>
+  <script src="/static/js/utils.js"></script>
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/track.js"></script>
+</body>
+</html>

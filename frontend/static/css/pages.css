@@ -1,0 +1,322 @@
+/* ============================================================================
+   Page-specific layout
+   ============================================================================ */
+
+.page-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.page-main {
+  flex: 1;
+  padding-top: var(--space-xl);
+  padding-bottom: var(--space-xl);
+}
+
+/* --- Hero (Report Issue landing) --------------------------------------------- */
+
+.hero {
+  text-align: left;
+  max-width: 760px;
+  margin-bottom: var(--space-xl);
+}
+
+.hero__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  background: var(--color-surface-container);
+  color: var(--color-on-surface-variant);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-full);
+  font-size: var(--label-md-size);
+  font-weight: var(--label-md-weight);
+  letter-spacing: var(--label-md-tracking);
+  text-transform: uppercase;
+  margin-bottom: var(--space-md);
+}
+
+.hero h1 {
+  margin-bottom: var(--space-md);
+}
+
+.hero p {
+  color: var(--color-on-surface-variant);
+}
+
+/* --- Report / flow layout ------------------------------------------------ */
+
+.flow-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-lg);
+}
+@media (min-width: 900px) {
+  .flow-grid {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+/* Each "screen" of the citizen flow is one section that we show/hide with
+   JS -- see report.js. This keeps the AI-analysis animation tied to the
+   real fetch() promise instead of faking a page-to-page navigation. */
+.flow-step {
+  display: none;
+}
+.flow-step.is-active {
+  display: block;
+}
+
+/* --- AI Analysis screen ------------------------------------------------------ */
+
+.analysis-card {
+  text-align: center;
+  padding: var(--space-xl) var(--space-lg);
+}
+
+.analysis-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 2px solid var(--color-action);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto var(--space-lg);
+  color: var(--color-action);
+}
+
+.analysis-stage-list {
+  text-align: left;
+  max-width: 420px;
+  margin: var(--space-lg) auto 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.analysis-stage {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--color-on-surface-variant);
+  font-size: var(--body-sm-size);
+}
+
+.analysis-stage__marker {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--color-outline-variant);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: transparent;
+}
+
+.analysis-stage.is-done .analysis-stage__marker {
+  background: var(--color-success);
+  border-color: var(--color-success);
+  color: #ffffff;
+}
+
+.analysis-stage.is-active {
+  color: var(--color-on-surface);
+  font-weight: 600;
+}
+
+.analysis-stage.is-active .analysis-stage__marker {
+  border-color: var(--color-action);
+}
+
+.analysis-caption {
+  margin-top: var(--space-md);
+  color: var(--color-on-surface-variant);
+  font-size: var(--body-sm-size);
+}
+
+/* --- Submission result -------------------------------------------------------- */
+
+.result-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-lg);
+  background: var(--color-primary);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto var(--space-lg);
+}
+
+.result-summary {
+  text-align: center;
+  margin-bottom: var(--space-xl);
+}
+
+.result-id-card {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-lg);
+  justify-content: space-between;
+  background: var(--color-surface-container-low);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  margin-bottom: var(--space-xl);
+}
+
+.result-id-card__block .type-label {
+  margin-bottom: var(--space-xs);
+}
+
+.result-id-value {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.result-actions {
+  display: flex;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+/* --- Trust / info panel (sidebar on report screen) --------------------------- */
+
+.info-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.info-panel .card__body p {
+  color: var(--color-on-surface-variant);
+  font-size: var(--body-sm-size);
+}
+
+.department-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.department-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-xs) 0;
+  border-bottom: 1px solid var(--color-card-header-border);
+  font-size: var(--body-sm-size);
+}
+
+.department-list li:last-child {
+  border-bottom: none;
+}
+
+/* --- Tracking page ------------------------------------------------------------ */
+
+.track-search {
+  display: flex;
+  gap: var(--space-sm);
+  max-width: 520px;
+  margin-bottom: var(--space-xl);
+}
+
+.track-search input {
+  flex: 1;
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-default);
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--body-md-size);
+}
+
+.track-search input:focus {
+  outline: none;
+  border: 2px solid var(--color-action);
+}
+
+.track-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+
+.track-header__id {
+  font-size: var(--body-sm-size);
+  color: var(--color-on-surface-variant);
+  margin-bottom: var(--space-xs);
+}
+
+.track-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+
+.track-meta-grid dt {
+  font-size: var(--label-md-size);
+  font-weight: var(--label-md-weight);
+  letter-spacing: var(--label-md-tracking);
+  text-transform: uppercase;
+  color: var(--color-on-surface-variant);
+  margin-bottom: var(--space-xs);
+}
+
+.track-meta-grid dd {
+  margin: 0;
+  font-size: var(--body-md-size);
+}
+
+.track-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-lg);
+}
+@media (min-width: 900px) {
+  .track-layout {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.state-panel {
+  text-align: center;
+  padding: var(--space-xl) var(--space-lg);
+}
+
+.state-panel__icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto var(--space-md);
+  color: var(--color-on-surface-variant);
+}
+
+/* --- Loading skeletons --------------------------------------------------------- */
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-container-low) 25%,
+    var(--color-surface-container) 37%,
+    var(--color-surface-container-low) 63%
+  );
+  background-size: 400% 100%;
+  animation: skeleton-loading 1.4s ease infinite;
+  border-radius: var(--radius-default);
+}
+@keyframes skeleton-loading {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}

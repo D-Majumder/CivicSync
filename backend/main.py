@@ -1,7 +1,11 @@
+from pathlib import Path as FilePath
 from typing import Literal
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Path, Query, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from google.genai.errors import APIError
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -76,6 +80,20 @@ app = FastAPI(
     title="CivicSync API",
     description="AI-powered civic intelligence platform API",
     version="0.1.0",
+)
+
+# Milestone 11: the frontend is normally served by this same FastAPI app
+# (see the static mount + page routes at the bottom of this file), which
+# makes it same-origin and needs no CORS at all. This middleware exists
+# only as a defensive fallback for local development, in case someone
+# runs the frontend from a separate dev server on a different port.
+# GEMINI credentials and all business logic remain entirely server-side
+# regardless of where the frontend is served from.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
 )
 
 
@@ -787,3 +805,52 @@ def read_civic_insights(db: Session = Depends(get_db)) -> InsightsResponse:
 )
 def prioritize_civic_insights(db: Session = Depends(get_db)) -> PrioritizedInsightsResponse:
     return get_prioritized_insights(db)
+
+
+# ============================================================================
+# Frontend (Milestone 11)
+#
+# Plain HTML/CSS/JS, no build step, no framework -- served directly by this
+# same FastAPI app so the whole product (backend + frontend) starts with a
+# single command and runs same-origin (no CORS needed by default; see the
+# CORSMiddleware above for the dev-server fallback case). These routes are
+# declared LAST, after every /api/* route above, so none of them can ever
+# shadow an API route.
+#
+# /track/{public_id} is a real FastAPI path route (not a StaticFiles entry,
+# which can only serve literal file paths) so a citizen can get a genuine
+# shareable URL like /track/CIV-AFFDA97DDA53 -- the page itself is always
+# the same static HTML file; client-side JS reads the id out of the URL
+# path and calls GET /api/track/{public_id} to render it.
+# ============================================================================
+
+_FRONTEND_DIR = FilePath(__file__).resolve().parent.parent / "frontend"
+
+
+@app.get("/", include_in_schema=False)
+def serve_citizen_home() -> FileResponse:
+    return FileResponse(_FRONTEND_DIR / "index.html")
+
+
+@app.get("/track", include_in_schema=False)
+def serve_track_page() -> FileResponse:
+    return FileResponse(_FRONTEND_DIR / "track.html")
+
+
+@app.get("/track/{public_id}", include_in_schema=False)
+def serve_track_page_with_id(public_id: str) -> FileResponse:
+    # public_id is intentionally NOT validated here -- this route only
+    # serves the static page shell. The actual lookup (and the 404/422
+    # handling for a missing/malformed id) happens client-side against the
+    # real GET /api/track/{public_id} API route above.
+    return FileResponse(_FRONTEND_DIR / "track.html")
+
+
+@app.get("/admin", include_in_schema=False)
+def serve_admin_placeholder() -> FileResponse:
+    return FileResponse(_FRONTEND_DIR / "admin.html")
+
+
+# Everything else under /static/* (CSS, JS, the logo) -- mounted last so it
+# never competes with the routes above.
+app.mount("/static", StaticFiles(directory=_FRONTEND_DIR / "static"), name="static")

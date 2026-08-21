@@ -1,0 +1,244 @@
+/* ============================================================================
+   CivicSync design tokens
+   Translated directly from DESIGN.md. Values here are the source of truth
+   for color, typography, spacing, radius, and elevation across the app.
+   ============================================================================ */
+
+:root {
+  /* --- Colors (from DESIGN.md `colors`) --- */
+  --color-surface: #f8f9ff;
+  --color-surface-dim: #cbdbf5;
+  --color-surface-bright: #f8f9ff;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #eff4ff;
+  --color-surface-container: #e5eeff;
+  --color-surface-container-high: #dce9ff;
+  --color-surface-container-highest: #d3e4fe;
+  --color-on-surface: #0b1c30;
+  --color-on-surface-variant: #45464d;
+  --color-inverse-surface: #213145;
+  --color-inverse-on-surface: #eaf1ff;
+  --color-outline: #76777d;
+  --color-outline-variant: #c6c6cd;
+
+  --color-primary: #0f172a; /* DESIGN.md prose: "Civic Blue" #0F172A used for primary surfaces/nav */
+  --color-on-primary: #ffffff;
+  --color-primary-container: #131b2e;
+  --color-on-primary-container: #7c839b;
+
+  --color-secondary: #515f74;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #d5e3fd;
+  --color-on-secondary-container: #57657b;
+
+  --color-action: #003ea8; /* DESIGN.md "Action Blue" -- primary CTAs, focus rings, links */
+  --color-tertiary-container: #00174b;
+  --color-on-tertiary-container: #497cff;
+
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #93000a;
+
+  --color-success: #1e7a34;
+  --color-success-container: #dcf5e3;
+  --color-warning: #9a6700;
+  --color-warning-container: #fff3d6;
+
+  --color-background: #f8f9ff;
+  --color-on-background: #0b1c30;
+  --color-card-border: #e2e8f0;
+  --color-card-header-border: #f1f5f9;
+
+  /* --- Typography (from DESIGN.md `typography`) --- */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  --display-lg-size: 48px;
+  --display-lg-weight: 700;
+  --display-lg-line: 56px;
+  --display-lg-tracking: -0.02em;
+
+  --display-lg-mobile-size: 32px;
+  --display-lg-mobile-line: 40px;
+
+  --headline-md-size: 24px;
+  --headline-md-weight: 600;
+  --headline-md-line: 32px;
+  --headline-md-tracking: -0.01em;
+
+  --headline-sm-size: 20px;
+  --headline-sm-weight: 600;
+  --headline-sm-line: 28px;
+
+  --body-lg-size: 18px;
+  --body-lg-weight: 400;
+  --body-lg-line: 28px;
+
+  --body-md-size: 16px;
+  --body-md-weight: 400;
+  --body-md-line: 24px;
+
+  --body-sm-size: 14px;
+  --body-sm-weight: 400;
+  --body-sm-line: 20px;
+
+  --label-md-size: 12px;
+  --label-md-weight: 600;
+  --label-md-line: 16px;
+  --label-md-tracking: 0.05em;
+
+  /* --- Spacing (4px baseline grid, from DESIGN.md `spacing`) --- */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 40px;
+  --container-max: 1280px;
+  --gutter: 24px;
+  --margin-mobile: 16px;
+
+  /* --- Radius (from DESIGN.md `rounded`) --- */
+  --radius-sm: 0.125rem;
+  --radius-default: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-full: 9999px;
+
+  /* --- Elevation (from DESIGN.md "Elevation & Depth") --- */
+  --shadow-subtle: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+}
+
+/* ============================================================================
+   Reset & base
+   ============================================================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-family);
+  font-size: var(--body-md-size);
+  line-height: var(--body-md-line);
+  font-weight: var(--body-md-weight);
+  color: var(--color-on-surface);
+  background: var(--color-background);
+  -webkit-font-smoothing: antialiased;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* --- Typography utility classes -------------------------------------------- */
+
+.type-display-lg {
+  font-size: var(--display-lg-mobile-size);
+  font-weight: var(--display-lg-weight);
+  line-height: var(--display-lg-mobile-line);
+  letter-spacing: var(--display-lg-tracking);
+}
+@media (min-width: 768px) {
+  .type-display-lg {
+    font-size: var(--display-lg-size);
+    line-height: var(--display-lg-line);
+  }
+}
+
+.type-headline-md {
+  font-size: var(--headline-md-size);
+  font-weight: var(--headline-md-weight);
+  line-height: var(--headline-md-line);
+  letter-spacing: var(--headline-md-tracking);
+}
+
+.type-headline-sm {
+  font-size: var(--headline-sm-size);
+  font-weight: var(--headline-sm-weight);
+  line-height: var(--headline-sm-line);
+}
+
+.type-body-lg {
+  font-size: var(--body-lg-size);
+  line-height: var(--body-lg-line);
+}
+
+.type-body-sm {
+  font-size: var(--body-sm-size);
+  line-height: var(--body-sm-line);
+}
+
+.type-label {
+  font-size: var(--label-md-size);
+  font-weight: var(--label-md-weight);
+  line-height: var(--label-md-line);
+  letter-spacing: var(--label-md-tracking);
+  text-transform: uppercase;
+  color: var(--color-on-surface-variant);
+}
+
+/* --- Layout primitives ------------------------------------------------------ */
+
+.container {
+  max-width: var(--container-max);
+  margin: 0 auto;
+  padding: 0 var(--margin-mobile);
+}
+@media (min-width: 768px) {
+  .container {
+    padding: 0 var(--gutter);
+  }
+}
+@media (min-width: 1024px) {
+  .container {
+    padding: 0 var(--space-xl);
+  }
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

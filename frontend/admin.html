@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CivicSync — Command Center</title>
+  <link rel="icon" href="/static/assets/logo.png" />
+  <link rel="stylesheet" href="/static/css/tokens.css" />
+  <link rel="stylesheet" href="/static/css/components.css" />
+  <link rel="stylesheet" href="/static/css/pages.css" />
+</head>
+<body>
+  <div class="authority-shell">
+    <aside class="authority-sidebar">
+      <a href="/" class="brand">
+        <img src="/static/assets/logo.png" alt="CivicSync" />
+        <span>CivicSync</span>
+      </a>
+      <nav class="authority-nav" aria-label="Authority">
+        <a href="/admin" class="active">Dashboard</a>
+        <a href="#" aria-disabled="true" title="Coming in a future milestone">Issue Queue</a>
+        <a href="#" aria-disabled="true" title="Coming in a future milestone">Civic Intelligence</a>
+        <a href="#" aria-disabled="true" title="Coming in a future milestone">Settings</a>
+      </nav>
+    </aside>
+
+    <main class="authority-main">
+      <div class="container" style="padding: 0;">
+        <h1 class="type-headline-md" style="margin-bottom: 4px;">Command Center</h1>
+        <p style="color: var(--color-on-surface-variant); margin-bottom: var(--space-lg);">
+          Foundation for the authority dashboard — expanded in a later milestone. The figures
+          below are live from CivicSync's own data.
+        </p>
+
+        <div id="admin-error" class="notice notice-error" hidden style="margin-bottom: var(--space-lg);"></div>
+
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-card__label">Total Issues</div>
+            <div class="kpi-card__value" id="kpi-total">—</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-card__label">Submitted</div>
+            <div class="kpi-card__value" id="kpi-submitted">—</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-card__label">In Progress</div>
+            <div class="kpi-card__value" id="kpi-in-progress">—</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-card__label">Resolved</div>
+            <div class="kpi-card__value" id="kpi-resolved">—</div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/static/js/config.js"></script>
+  <script src="/static/js/utils.js"></script>
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/admin.js"></script>
+</body>
+</html>

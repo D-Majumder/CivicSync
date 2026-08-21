@@ -1,0 +1,276 @@
+/**
+ * Citizen report flow (index.html): Report Issue -> AI Analysis ->
+ * Submission Result, as one page with JS-driven view switching rather
+ * than three separate page loads.
+ *
+ * IMPORTANT HONESTY NOTE: POST /api/issues is a SINGLE backend request --
+ * Gemini analysis and persistence both happen server-side inside that one
+ * call. The "stages" shown during the AI Analysis view are a waiting
+ * animation for that one request, not four separate API calls. The
+ * animation never claims completion of any stage it hasn't actually
+ * reached, and the final "Analysis complete" state only appears once the
+ * real response has actually come back.
+ */
+(function () {
+  const { CivicSyncApi, CivicSyncUtils } = window;
+
+  const MIN_COMPLAINT_LENGTH = 10;
+  const STAGE_ADVANCE_MS = 900;
+  const MIN_ANALYSIS_DISPLAY_MS = 1400;
+
+  const STAGES = [
+    'Analyzing complaint',
+    'Classifying issue',
+    'Determining severity',
+    'Identifying department',
+  ];
+
+  // --- Element refs -----------------------------------------------------------
+  const formStep = document.getElementById('step-form');
+  const analysisStep = document.getElementById('step-analysis');
+  const resultStep = document.getElementById('step-result');
+
+  const form = document.getElementById('report-form');
+  const complaintField = document.getElementById('complaint-text');
+  const complaintFieldWrap = document.getElementById('complaint-field-wrap');
+  const complaintError = document.getElementById('complaint-error');
+  const submitButton = document.getElementById('submit-button');
+  const submitButtonLabel = document.getElementById('submit-button-label');
+  const formNotice = document.getElementById('form-notice');
+
+  const stageListEl = document.getElementById('analysis-stage-list');
+  const analysisHeading = document.getElementById('analysis-heading');
+  const analysisCaption = document.getElementById('analysis-caption');
+  const analysisIcon = document.getElementById('analysis-icon');
+  const analysisOutcome = document.getElementById('analysis-outcome');
+  const analysisCategory = document.getElementById('analysis-category');
+  const analysisSeverity = document.getElementById('analysis-severity');
+  const analysisDepartment = document.getElementById('analysis-department');
+  const viewResultButton = document.getElementById('view-result-button');
+
+  const resultPublicId = document.getElementById('result-public-id');
+  const resultDepartment = document.getElementById('result-department');
+  const resultStatus = document.getElementById('result-status');
+  const trackButton = document.getElementById('track-button');
+  const reportAnotherButton = document.getElementById('report-another-button');
+
+  const departmentListEl = document.getElementById('department-list');
+
+  let lastCreatedIssue = null;
+
+  // --- View switching -----------------------------------------------------------
+
+  function showStep(step) {
+    [formStep, analysisStep, resultStep].forEach((el) => el.classList.remove('is-active'));
+    step.classList.add('is-active');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // --- Form validation ------------------------------------------------------------
+
+  function setFieldError(message) {
+    if (message) {
+      complaintFieldWrap.classList.add('has-error');
+      complaintError.textContent = message;
+    } else {
+      complaintFieldWrap.classList.remove('has-error');
+      complaintError.textContent = '';
+    }
+  }
+
+  function validateComplaint() {
+    const value = complaintField.value.trim();
+    if (value.length === 0) {
+      setFieldError('Please describe the issue before submitting.');
+      return null;
+    }
+    if (value.length < MIN_COMPLAINT_LENGTH) {
+      setFieldError(`Please provide a bit more detail (at least ${MIN_COMPLAINT_LENGTH} characters).`);
+      return null;
+    }
+    setFieldError(null);
+    return value;
+  }
+
+  complaintField.addEventListener('input', () => {
+    if (complaintFieldWrap.classList.contains('has-error')) {
+      validateComplaint();
+    }
+  });
+
+  function setFormNotice(message, tone) {
+    if (!message) {
+      formNotice.hidden = true;
+      formNotice.textContent = '';
+      formNotice.className = 'notice';
+      return;
+    }
+    formNotice.hidden = false;
+    formNotice.className = `notice notice-${tone}`;
+    formNotice.textContent = message;
+  }
+
+  function setSubmitting(isSubmitting) {
+    submitButton.disabled = isSubmitting;
+    submitButtonLabel.textContent = isSubmitting ? 'Submitting…' : 'Submit Report';
+    submitButton.querySelector('.spinner')?.remove();
+    if (isSubmitting) {
+      const spinner = document.createElement('span');
+      spinner.className = 'spinner';
+      submitButton.prepend(spinner);
+    }
+  }
+
+  // --- AI Analysis stage animation -------------------------------------------------
+
+  function renderStageList() {
+    stageListEl.innerHTML = '';
+    STAGES.forEach((label) => {
+      const item = document.createElement('div');
+      item.className = 'analysis-stage';
+      item.innerHTML = `<span class="analysis-stage__marker">✓</span><span>${CivicSyncUtils.escapeHtml(label)}</span>`;
+      stageListEl.appendChild(item);
+    });
+  }
+
+  function runStageAnimation() {
+    renderStageList();
+    const stageEls = Array.from(stageListEl.children);
+    let index = 0;
+    stageEls[0].classList.add('is-active');
+
+    const intervalId = setInterval(() => {
+      // Stop advancing once we reach the last stage -- we never claim
+      // "Identifying department" is done until the real response arrives.
+      if (index >= stageEls.length - 1) return;
+      stageEls[index].classList.remove('is-active');
+      stageEls[index].classList.add('is-done');
+      index += 1;
+      stageEls[index].classList.add('is-active');
+    }, STAGE_ADVANCE_MS);
+
+    return {
+      finish() {
+        clearInterval(intervalId);
+        stageEls.forEach((el) => {
+          el.classList.remove('is-active');
+          el.classList.add('is-done');
+        });
+      },
+    };
+  }
+
+  function wait(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  // --- Rendering real results -----------------------------------------------------
+
+  function resetAnalysisIcon() {
+    analysisIcon.innerHTML = '<span class="spinner spinner-dark"></span>';
+    analysisIcon.style.borderColor = '';
+    analysisIcon.style.color = '';
+  }
+
+  function markAnalysisIconComplete() {
+    analysisIcon.textContent = '\u2713';
+    analysisIcon.style.borderColor = 'var(--color-success)';
+    analysisIcon.style.color = 'var(--color-success)';
+  }
+
+  function renderAnalysisOutcome(issue) {
+    analysisHeading.textContent = 'Analysis Complete';
+    markAnalysisIconComplete();
+    analysisCaption.textContent = 'CivicSync\u2019s AI has classified your report.';
+
+    analysisCategory.textContent = issue.category;
+    const severityChip = analysisSeverity.querySelector('.chip');
+    severityChip.textContent = issue.severity;
+    severityChip.className = `chip ${CivicSyncUtils.severityChipClass(issue.severity)}`;
+    analysisDepartment.textContent = issue.suggested_department || 'Not determined from the report text';
+
+    analysisOutcome.hidden = false;
+  }
+
+  function renderResult(issue) {
+    resultPublicId.textContent = issue.public_id;
+    resultDepartment.textContent = issue.assigned_department
+      ? issue.assigned_department.name
+      : 'Not yet assigned \u2014 pending review';
+    const statusLabel = issue.status.charAt(0) + issue.status.slice(1).toLowerCase();
+    resultStatus.textContent = statusLabel.replace(/_/g, ' ');
+    trackButton.setAttribute('href', `/track/${encodeURIComponent(issue.public_id)}`);
+  }
+
+  // --- Submit handler ---------------------------------------------------------------
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    setFormNotice(null);
+
+    const text = validateComplaint();
+    if (text === null) return;
+
+    setSubmitting(true);
+    showStep(analysisStep);
+    analysisOutcome.hidden = true;
+    analysisHeading.textContent = 'AI Analysis in Progress';
+    resetAnalysisIcon();
+    analysisCaption.textContent =
+      'CivicSync sends your report to Gemini in a single request \u2014 these stages show what that analysis covers.';
+
+    const animation = runStageAnimation();
+    const startedAt = Date.now();
+
+    try {
+      const issue = await CivicSyncApi.submitIssue(text);
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < MIN_ANALYSIS_DISPLAY_MS) {
+        await wait(MIN_ANALYSIS_DISPLAY_MS - elapsed);
+      }
+      animation.finish();
+      lastCreatedIssue = issue;
+      renderAnalysisOutcome(issue);
+    } catch (err) {
+      animation.finish();
+      showStep(formStep);
+      const tone = err.type === 'validation' ? 'error' : 'error';
+      setFormNotice(err.message, tone);
+    } finally {
+      setSubmitting(false);
+    }
+  });
+
+  viewResultButton.addEventListener('click', () => {
+    if (!lastCreatedIssue) return;
+    renderResult(lastCreatedIssue);
+    showStep(resultStep);
+  });
+
+  reportAnotherButton.addEventListener('click', () => {
+    form.reset();
+    setFieldError(null);
+    setFormNotice(null);
+    lastCreatedIssue = null;
+    showStep(formStep);
+  });
+
+  // --- Real department list (no fabricated trust stats) -----------------------------
+
+  async function loadDepartments() {
+    if (!departmentListEl) return;
+    try {
+      const departments = await CivicSyncApi.getDepartments();
+      departmentListEl.innerHTML = '';
+      departments.forEach((dept) => {
+        const li = document.createElement('li');
+        li.innerHTML = `<span>${CivicSyncUtils.escapeHtml(dept.name)}</span>`;
+        departmentListEl.appendChild(li);
+      });
+    } catch (err) {
+      departmentListEl.innerHTML = '<li>Department list unavailable right now.</li>';
+    }
+  }
+
+  loadDepartments();
+})();
