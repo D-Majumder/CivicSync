@@ -210,6 +210,91 @@ class IssueStatusHistory(Base):
         )
 
 
+class JurisdictionLevel(str, enum.Enum):
+    """The administrative hierarchy CivicSync's jurisdiction model
+    represents: Country -> State/Province/Region -> District/Administrative
+    Region -> Local Government/Municipality. Deliberately generic (not
+    "IndianState"/"IndianDistrict") so the same four levels can represent
+    any country's administrative structure -- see Jurisdiction's docstring
+    for the India example and the BRICS-generalization rationale.
+    """
+
+    COUNTRY = "COUNTRY"
+    STATE = "STATE"
+    DISTRICT = "DISTRICT"
+    LOCAL_BODY = "LOCAL_BODY"
+
+
+class Jurisdiction(Base):
+    """A node in CivicSync's administrative jurisdiction hierarchy.
+
+    Self-referential: each row optionally points to a parent row one level
+    up, so the same table represents an arbitrarily deep chain without a
+    separate table per level. For India this looks like:
+
+        India (COUNTRY, country_code="IN")
+          -> West Bengal (STATE)
+            -> Nadia (DISTRICT)
+              -> Krishnanagar Municipality (LOCAL_BODY)
+
+    The same four levels and the same `country_code` field work
+    identically for any other country (Brazil, Russia, China, South
+    Africa, ...) -- nothing here is India-specific in structure, only the
+    seeded demo *data* is. This is deliberately a small, generic
+    abstraction: four levels, a parent pointer, a country code. It is not
+    a GIS system and not a national government registry.
+
+    `Department.jurisdiction_id` (nullable) is the only place this
+    connects to the rest of CivicSync today -- a department optionally
+    belongs to a jurisdiction, and an Issue is scoped to a jurisdiction
+    transitively through its assigned department. Issue itself is
+    untouched by this milestone.
+    """
+
+    __tablename__ = "jurisdictions"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # Stable, human-meaningful public reference (e.g. "IN-WB-NADIA-KRISHNANAGAR").
+    # Never the internal integer id -- consistent with how Department.code
+    # already works.
+    code: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    level: Mapped[JurisdictionLevel] = mapped_column(
+        SAEnum(
+            JurisdictionLevel,
+            name="jurisdiction_level",
+            create_constraint=True,
+            validate_strings=True,
+        ),
+        nullable=False,
+    )
+    # ISO-3166-alpha-2-style country code, present on every row regardless
+    # of level (not just COUNTRY rows) so a query can filter "everything
+    # in India" without walking the tree. This is the concrete field that
+    # makes BRICS generalization real rather than aspirational: switching
+    # country_code is what it takes to stand up a jurisdiction tree for a
+    # different country.
+    country_code: Mapped[str] = mapped_column(String(2), nullable=False, index=True)
+
+    parent_jurisdiction_id: Mapped[int | None] = mapped_column(
+        ForeignKey("jurisdictions.id"), nullable=True, index=True
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
+    )
+
+    parent: Mapped["Jurisdiction | None"] = relationship(remote_side=[id])
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging convenience
+        return f"<Jurisdiction code={self.code!r} level={self.level!r}>"
+
+
 class Department(Base):
     """A civic department in CivicSync's controlled registry.
 
@@ -228,6 +313,17 @@ class Department(Base):
     name: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    # Nullable: a department belonging to no specific jurisdiction (e.g.
+    # NULL) remains valid -- this is what makes the M13 jurisdiction
+    # hierarchy purely additive. Every department that existed before this
+    # migration keeps working with jurisdiction_id=NULL until/unless a
+    # migration explicitly backfills it (see the M13 migration, which
+    # backfills the existing seed departments to a real demo jurisdiction).
+    jurisdiction_id: Mapped[int | None] = mapped_column(
+        ForeignKey("jurisdictions.id"), nullable=True, index=True
+    )
+    jurisdiction: Mapped["Jurisdiction | None"] = relationship()
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow

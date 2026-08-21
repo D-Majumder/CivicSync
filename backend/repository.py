@@ -21,6 +21,8 @@ from backend.models import (
     IssueAssignmentHistory,
     IssueStatus,
     IssueStatusHistory,
+    Jurisdiction,
+    JurisdictionLevel,
 )
 from backend.transitions import validate_transition
 
@@ -642,3 +644,91 @@ def count_active_issues_by_category(db: Session) -> dict[IssueCategory, int]:
     for category_value, count in rows:
         counts[category_value] = count
     return counts
+
+
+# --- Jurisdiction hierarchy (Milestone 13) -----------------------------------
+#
+# Read-only for now (the registry is seeded via Alembic, same pattern as
+# Department). Kept deliberately small: list + ancestry are the only two
+# operations the API/frontend need.
+
+
+def get_jurisdiction_by_code(db: Session, code: str) -> Jurisdiction | None:
+    """Fetch a single Jurisdiction by its public code, or None."""
+    return db.query(Jurisdiction).filter(Jurisdiction.code == code).one_or_none()
+
+
+def list_jurisdictions(
+    db: Session,
+    *,
+    level: JurisdictionLevel | None = None,
+    country_code: str | None = None,
+) -> list[Jurisdiction]:
+    """Active jurisdictions, optionally filtered by level and/or country.
+
+    Eager-loads `parent` (a to-one relationship, so this can't multiply
+    rows) in the same query -- avoids an N+1 if a caller needs each row's
+    parent_code, matching the pattern already used for
+    Issue.assigned_department elsewhere in this module.
+    """
+    query = db.query(Jurisdiction).options(joinedload(Jurisdiction.parent)).filter(
+        Jurisdiction.is_active.is_(True)
+    )
+    if level is not None:
+        query = query.filter(Jurisdiction.level == level)
+    if country_code is not None:
+        query = query.filter(Jurisdiction.country_code == country_code)
+    return query.order_by(Jurisdiction.level, Jurisdiction.code).all()
+
+
+def _walk_ancestry(
+    jurisdiction: Jurisdiction, all_by_id: dict[int, Jurisdiction]
+) -> list[Jurisdiction]:
+    """Pure, DB-free ancestry walk given an already-loaded id->Jurisdiction
+    map. Root-to-leaf order."""
+    chain: list[Jurisdiction] = []
+    current: Jurisdiction | None = all_by_id.get(jurisdiction.id)
+    while current is not None:
+        chain.append(current)
+        current = (
+            all_by_id.get(current.parent_jurisdiction_id)
+            if current.parent_jurisdiction_id is not None
+            else None
+        )
+    return list(reversed(chain))
+
+
+def get_jurisdiction_ancestry(db: Session, jurisdiction: Jurisdiction) -> list[Jurisdiction]:
+    """Root-to-leaf ancestry chain for a single jurisdiction, e.g.
+    [India, West Bengal, Nadia, Krishnanagar Municipality].
+
+    Loads the entire jurisdictions table ONCE (it's small by design -- a
+    handful of administrative levels, not a GIS dataset) and walks the
+    parent chain in Python. One query regardless of hierarchy depth.
+
+    For resolving ancestry for MULTIPLE jurisdictions at once (e.g. a
+    list endpoint), use get_jurisdictions_with_ancestry below instead --
+    calling this function once per row would re-load the whole table on
+    every call, which is exactly the N+1 shape this module otherwise
+    avoids.
+    """
+    all_by_id = {j.id: j for j in db.query(Jurisdiction).all()}
+    return _walk_ancestry(jurisdiction, all_by_id)
+
+
+def get_jurisdictions_with_ancestry(
+    db: Session,
+    *,
+    level: JurisdictionLevel | None = None,
+    country_code: str | None = None,
+) -> list[tuple[Jurisdiction, list[Jurisdiction]]]:
+    """Active jurisdictions (optionally filtered), each paired with its
+    ancestry chain. Exactly two queries total -- one for the filtered
+    list, one for the whole table (reused to resolve every row's
+    ancestry) -- regardless of how many jurisdictions are returned. This
+    is what backend.service.get_jurisdictions uses instead of calling
+    get_jurisdiction_ancestry once per row.
+    """
+    jurisdictions = list_jurisdictions(db, level=level, country_code=country_code)
+    all_by_id = {j.id: j for j in db.query(Jurisdiction).all()}
+    return [(j, _walk_ancestry(j, all_by_id)) for j in jurisdictions]

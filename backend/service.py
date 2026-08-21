@@ -22,7 +22,7 @@ from ai.client import analyze_complaint, generate_insight_prioritization
 from ai.schemas import IssueCategory, SeverityLevel
 from backend import insights as insight_rules
 from backend.assignment_rules import DepartmentInactiveError, DepartmentNotFoundError
-from backend.models import Department, Issue, IssueStatus
+from backend.models import Department, Issue, IssueStatus, JurisdictionLevel
 from backend.repository import (
     TERMINAL_STATUSES,
     assign_department_to_issue,
@@ -38,6 +38,9 @@ from backend.repository import (
     get_department_workload,
     get_issue_aging_buckets,
     get_issue_by_public_id,
+    get_jurisdiction_ancestry,
+    get_jurisdiction_by_code,
+    get_jurisdictions_with_ancestry,
     get_operational_queue as repo_get_operational_queue,
     get_recent_activity,
     get_resolution_timing_metrics,
@@ -65,6 +68,9 @@ from backend.schemas import (
     FunnelStage,
     Insight,
     InsightsResponse,
+    JurisdictionListResponse,
+    JurisdictionResponse,
+    JurisdictionSummary,
     PrioritizedInsightsResponse,
     PublicIssueTrackingResponse,
     PublicTimelineEntry,
@@ -611,3 +617,46 @@ def get_prioritized_insights(db: Session) -> PrioritizedInsightsResponse:
         ),
         ai_recommendation_error=None,
     )
+
+
+# --- Jurisdiction hierarchy (Milestone 13) -----------------------------------
+
+
+def _to_jurisdiction_response(
+    jurisdiction, ancestry: list
+) -> JurisdictionResponse:
+    return JurisdictionResponse(
+        code=jurisdiction.code,
+        name=jurisdiction.name,
+        level=jurisdiction.level,
+        country_code=jurisdiction.country_code,
+        parent_code=jurisdiction.parent.code if jurisdiction.parent else None,
+        is_active=jurisdiction.is_active,
+        ancestry=[
+            JurisdictionSummary(code=j.code, name=j.name, level=j.level) for j in ancestry
+        ],
+    )
+
+
+def get_jurisdictions(
+    db: Session, *, level: JurisdictionLevel | None = None, country_code: str | None = None
+) -> JurisdictionListResponse:
+    """List active jurisdictions, each with its full ancestry chain
+    already attached (no second request per row to build a breadcrumb).
+    Exactly two queries total regardless of how many jurisdictions are
+    returned (see get_jurisdictions_with_ancestry). Never calls Gemini.
+    """
+    pairs = get_jurisdictions_with_ancestry(db, level=level, country_code=country_code)
+    return JurisdictionListResponse(
+        jurisdictions=[_to_jurisdiction_response(j, ancestry) for j, ancestry in pairs]
+    )
+
+
+def get_jurisdiction_detail(db: Session, code: str) -> JurisdictionResponse | None:
+    """Single jurisdiction by code, with its ancestry chain. Returns None
+    if no jurisdiction matches (route -> 404). Never calls Gemini."""
+    jurisdiction = get_jurisdiction_by_code(db, code)
+    if jurisdiction is None:
+        return None
+    ancestry = get_jurisdiction_ancestry(db, jurisdiction)
+    return _to_jurisdiction_response(jurisdiction, ancestry)

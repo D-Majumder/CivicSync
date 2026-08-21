@@ -136,6 +136,15 @@ const CivicSyncApi = {
     return request('/api/departments', { method: 'GET' });
   },
 
+  /**
+   * Jurisdictions in the administrative hierarchy (Country -> State ->
+   * District -> Local Body). filters may include level, country_code.
+   * Each returned jurisdiction includes its full ancestry chain.
+   */
+  getJurisdictions(filters) {
+    return request(`/api/jurisdictions${toQueryString(filters)}`, { method: 'GET' });
+  },
+
   /** Real aggregate counts (by_status/by_severity/by_department). */
   getDashboardSummary() {
     return request('/api/admin/dashboard/summary', { method: 'GET' });

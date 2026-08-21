@@ -757,8 +757,37 @@
     else if (state.view === 'dashboard') loadDashboard();
   }
 
+  // ================================================================================
+  // JURISDICTION CONTEXT (Milestone 13)
+  // ================================================================================
+  //
+  // Real, backend-driven, read-only context -- not a decorative selector.
+  // Shows the one real jurisdiction chain currently configured (e.g.
+  // "India / West Bengal / Nadia / Krishnanagar Municipality"), sourced
+  // entirely from GET /api/jurisdictions. If no LOCAL_BODY jurisdiction
+  // is configured yet, the panel stays hidden rather than showing a fake
+  // placeholder chain.
+
+  async function loadJurisdictionContext() {
+    const panel = document.getElementById('jurisdiction-context');
+    const breadcrumbEl = document.getElementById('jurisdiction-breadcrumb');
+    try {
+      const response = await CivicSyncApi.getJurisdictions({ level: 'LOCAL_BODY' });
+      const localBody = response.jurisdictions[0];
+      if (!localBody) {
+        panel.hidden = true;
+        return;
+      }
+      breadcrumbEl.textContent = localBody.ancestry.map((j) => j.name).join(' / ');
+      panel.hidden = false;
+    } catch (err) {
+      panel.hidden = true; // fail quietly -- this is context, not core functionality
+    }
+  }
+
   // --- Boot --------------------------------------------------------------------------
 
+  loadJurisdictionContext();
   const initialView = (window.location.hash || '#dashboard').slice(1);
   setActiveView(initialView);
 })();

@@ -57,6 +57,7 @@ def test_department_table_exists_with_expected_columns(db_session):
         "name",
         "description",
         "is_active",
+        "jurisdiction_id",
         "created_at",
         "updated_at",
     }

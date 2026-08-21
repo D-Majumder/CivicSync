@@ -17,6 +17,16 @@
         <img src="/static/assets/logo.png" alt="CivicSync" />
         <span>CivicSync</span>
       </a>
+
+      <!-- Milestone 13: real jurisdiction context, backed by GET
+           /api/jurisdictions -- never decorative/fabricated. If no
+           LOCAL_BODY jurisdiction exists yet, this is hidden rather than
+           showing a fake placeholder chain. -->
+      <div id="jurisdiction-context" hidden>
+        <p class="type-label" style="color: #8b96ab; margin-bottom: 4px;">Current Jurisdiction</p>
+        <p class="type-body-sm" id="jurisdiction-breadcrumb" style="color: #dbe4f5;"></p>
+      </div>
+
       <nav class="authority-nav" aria-label="Authority" id="authority-nav">
         <a href="#dashboard" data-view="dashboard" class="active">Dashboard</a>
         <a href="#queue" data-view="queue">Issue Queue</a>

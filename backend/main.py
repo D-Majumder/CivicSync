@@ -18,7 +18,6 @@ from backend.assignment_rules import (
     DepartmentNotFoundError,
 )
 from backend.database import get_db
-from backend.models import PUBLIC_ID_PATTERN, Department, Issue, IssueStatus
 from backend.repository import (
     get_active_departments,
     get_assignment_history,
@@ -26,6 +25,7 @@ from backend.repository import (
     get_issue_by_public_id,
     get_status_history,
 )
+from backend.models import PUBLIC_ID_PATTERN, Department, Issue, IssueStatus, JurisdictionLevel
 from backend.schemas import (
     AdminIssueDetailResponse,
     AdminIssueListResponse,
@@ -41,6 +41,8 @@ from backend.schemas import (
     FunnelResponse,
     InsightsResponse,
     IssueResponse,
+    JurisdictionListResponse,
+    JurisdictionResponse,
     PrioritizedInsightsResponse,
     PublicIssueTrackingResponse,
     RecentActivityResponse,
@@ -57,6 +59,8 @@ from backend.service import (
     get_dashboard_summary,
     get_department_summary,
     get_department_workload_summary,
+    get_jurisdiction_detail,
+    get_jurisdictions,
     get_prioritized_insights,
     get_public_tracking,
     get_recent_activity_feed,
@@ -805,6 +809,59 @@ def read_civic_insights(db: Session = Depends(get_db)) -> InsightsResponse:
 )
 def prioritize_civic_insights(db: Session = Depends(get_db)) -> PrioritizedInsightsResponse:
     return get_prioritized_insights(db)
+
+
+# ============================================================================
+# Jurisdiction hierarchy (Milestone 13)
+#
+# Read-only reference data (Country -> State -> District -> Local Body),
+# same trust tier as GET /api/departments -- public, static, no internal
+# ids exposed. Never calls Gemini.
+# ============================================================================
+
+
+@app.get(
+    "/api/jurisdictions",
+    response_model=JurisdictionListResponse,
+    status_code=status.HTTP_200_OK,
+    summary="List jurisdictions",
+    description=(
+        "Active jurisdictions in CivicSync's administrative hierarchy "
+        "(Country -> State/Province -> District -> Local Government), "
+        "optionally filtered by level and/or country_code. Each entry "
+        "includes its full root-to-leaf ancestry chain. Public reference "
+        "data -- no internal database ids. Never calls Gemini."
+    ),
+)
+def list_jurisdictions_route(
+    level: JurisdictionLevel | None = Query(default=None, description="Filter by administrative level."),
+    country_code: str | None = Query(
+        default=None, description="Filter by ISO-3166-alpha-2-style country code, e.g. 'IN'."
+    ),
+    db: Session = Depends(get_db),
+) -> JurisdictionListResponse:
+    return get_jurisdictions(db, level=level, country_code=country_code)
+
+
+@app.get(
+    "/api/jurisdictions/{code}",
+    response_model=JurisdictionResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get a single jurisdiction by code",
+    description=(
+        "Single jurisdiction, with its full ancestry chain. Public "
+        "reference data -- no internal database ids. Never calls Gemini."
+    ),
+    responses={status.HTTP_404_NOT_FOUND: {"description": "No jurisdiction found with that code."}},
+)
+def read_jurisdiction(code: str, db: Session = Depends(get_db)) -> JurisdictionResponse:
+    jurisdiction = get_jurisdiction_detail(db, code)
+    if jurisdiction is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Jurisdiction not found.",
+        )
+    return jurisdiction
 
 
 # ============================================================================

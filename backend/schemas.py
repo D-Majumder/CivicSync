@@ -14,7 +14,7 @@ from typing import Annotated, Any
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
 from ai.schemas import IssueCategory, SeverityLevel
-from backend.models import IssueStatus
+from backend.models import IssueStatus, JurisdictionLevel
 
 
 def _tag_naive_datetime_as_utc(value: Any) -> Any:
@@ -570,3 +570,42 @@ class PrioritizedInsightsResponse(BaseModel):
     insights: list[Insight]
     ai_recommendation: AIPrioritizationRecommendation | None
     ai_recommendation_error: str | None = None
+
+
+# --- Jurisdiction hierarchy (Milestone 13) ------------------------------------
+
+
+class JurisdictionSummary(BaseModel):
+    """Minimal jurisdiction reference used inside an ancestry chain --
+    excludes the internal integer id, same convention as DepartmentSummary."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    code: str
+    name: str
+    level: JurisdictionLevel
+
+
+class JurisdictionResponse(BaseModel):
+    """Public API representation of a single jurisdiction.
+
+    `ancestry` is the full root-to-leaf chain (e.g. India -> West Bengal
+    -> Nadia -> Krishnanagar Municipality), included directly so a caller
+    never needs a second request per jurisdiction to build a breadcrumb --
+    see backend.repository.get_jurisdiction_ancestry, which computes this
+    in one query regardless of hierarchy depth. Excludes the internal
+    integer id and parent_jurisdiction_id; `parent_code` is the public
+    equivalent.
+    """
+
+    code: str
+    name: str
+    level: JurisdictionLevel
+    country_code: str
+    parent_code: str | None
+    is_active: bool
+    ancestry: list[JurisdictionSummary]
+
+
+class JurisdictionListResponse(BaseModel):
+    jurisdictions: list[JurisdictionResponse]
