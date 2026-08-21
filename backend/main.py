@@ -35,7 +35,9 @@ from backend.schemas import (
     DepartmentSummaryResponse,
     DepartmentWorkloadResponse,
     FunnelResponse,
+    InsightsResponse,
     IssueResponse,
+    PrioritizedInsightsResponse,
     PublicIssueTrackingResponse,
     RecentActivityResponse,
     ResolutionTimingResponse,
@@ -47,9 +49,11 @@ from backend.service import (
     assign_issue_department,
     get_admin_issue_detail,
     get_aging_buckets,
+    get_civic_insights,
     get_dashboard_summary,
     get_department_summary,
     get_department_workload_summary,
+    get_prioritized_insights,
     get_public_tracking,
     get_recent_activity_feed,
     get_resolution_timing,
@@ -722,3 +726,64 @@ def read_recent_activity(
     db: Session = Depends(get_db),
 ) -> RecentActivityResponse:
     return get_recent_activity_feed(db, limit=limit)
+
+
+# ============================================================================
+# Civic Accountability & Intelligence (Milestone 10) -- INTERNAL/AUTHORITY,
+# NOT PUBLIC. Same caveat as the rest of the Authority Operations API above:
+# NOT authenticated yet.
+#
+# AI SAFETY BOUNDARY: POST /api/admin/insights/prioritize is the only route
+# in this entire application (besides the existing POST /api/analyze and
+# POST /api/issues) that calls Gemini. Gemini's role here is strictly
+# advisory -- it reorders and explains insights CivicSync already computed
+# deterministically. It cannot and does not change any Issue's status,
+# department assignment, or any official record; those still only happen
+# through the existing lifecycle/assignment endpoints, driven by a human
+# authority. See ai/prompts.py's PRIORITIZATION_SYSTEM_PROMPT and
+# backend/service.py's get_prioritized_insights() for the enforced boundary.
+# ============================================================================
+
+
+@app.get(
+    "/api/admin/insights",
+    response_model=InsightsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="[INTERNAL/AUTHORITY] Grounded civic insights",
+    description=(
+        "INTERNAL AUTHORITY API -- not authenticated yet. Structured, "
+        "explainable insights (high-severity unresolved workload, "
+        "department workload concentration, stale-issue concentration, "
+        "recurring categories, lifecycle bottlenecks) computed entirely "
+        "with deterministic SQL aggregation over existing data. Every "
+        "insight's `evidence` traces back to real counts -- nothing is "
+        "fabricated, and an insight is only included when the underlying "
+        "data actually supports it. Purely deterministic; never calls "
+        "Gemini."
+    ),
+)
+def read_civic_insights(db: Session = Depends(get_db)) -> InsightsResponse:
+    return get_civic_insights(db)
+
+
+@app.post(
+    "/api/admin/insights/prioritize",
+    response_model=PrioritizedInsightsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="[INTERNAL/AUTHORITY] AI-assisted insight prioritization (advisory only)",
+    description=(
+        "INTERNAL AUTHORITY API -- not authenticated yet. Computes the same "
+        "grounded insights as GET /api/admin/insights, then asks Gemini to "
+        "recommend a priority order and explain it. ADVISORY ONLY: Gemini "
+        "never changes any issue's status, department assignment, or any "
+        "official record -- an authority must act through the existing "
+        "lifecycle/assignment endpoints. Only aggregate, non-identifying "
+        "insight data is sent to Gemini (never original complaint text, "
+        "public_id, or confidence). If there are no insights, Gemini is "
+        "never called. If Gemini is unavailable or fails, the grounded "
+        "insights are still returned with ai_recommendation=null rather "
+        "than failing the whole request."
+    ),
+)
+def prioritize_civic_insights(db: Session = Depends(get_db)) -> PrioritizedInsightsResponse:
+    return get_prioritized_insights(db)

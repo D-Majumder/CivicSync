@@ -601,3 +601,44 @@ def get_recent_activity(db: Session, limit: int = 20) -> list[tuple[IssueStatusH
         .limit(limit)
         .all()
     )
+
+
+# --- Civic Accountability & Intelligence (Milestone 10) ----------------------
+#
+# Two small, single-purpose aggregate queries that Milestone 9's existing
+# functions don't already provide. Everything else insight generation
+# needs (department workload, stale counts, status funnel) reuses M8/M9
+# functions directly -- see backend/service.py's get_civic_insights().
+
+
+def count_active_high_severity_issues(db: Session) -> dict[SeverityLevel, int]:
+    """Count of currently-active (non-terminal) issues at CRITICAL/HIGH
+    severity, by severity. One GROUP BY query; both severities are
+    present, zero-filled if unused."""
+    high_severities = (SeverityLevel.CRITICAL, SeverityLevel.HIGH)
+    counts: dict[SeverityLevel, int] = {s: 0 for s in high_severities}
+    rows = (
+        db.query(Issue.severity, func.count(Issue.id))
+        .filter(Issue.severity.in_(high_severities), Issue.status.notin_(TERMINAL_STATUSES))
+        .group_by(Issue.severity)
+        .all()
+    )
+    for severity_value, count in rows:
+        counts[severity_value] = count
+    return counts
+
+
+def count_active_issues_by_category(db: Session) -> dict[IssueCategory, int]:
+    """Count of currently-active (non-terminal) issues, by AI category.
+    One GROUP BY query; every IssueCategory is present, zero-filled if
+    unused."""
+    counts: dict[IssueCategory, int] = {c: 0 for c in IssueCategory}
+    rows = (
+        db.query(Issue.category, func.count(Issue.id))
+        .filter(Issue.status.notin_(TERMINAL_STATUSES))
+        .group_by(Issue.category)
+        .all()
+    )
+    for category_value, count in rows:
+        counts[category_value] = count
+    return counts

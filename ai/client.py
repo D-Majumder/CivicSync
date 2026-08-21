@@ -14,8 +14,13 @@ import os
 from google import genai
 from google.genai import types
 
-from ai.prompts import SYSTEM_PROMPT, build_user_prompt
-from ai.schemas import CivicIssue, GeminiCivicIssueSchema
+from ai.prompts import (
+    PRIORITIZATION_SYSTEM_PROMPT,
+    SYSTEM_PROMPT,
+    build_prioritization_prompt,
+    build_user_prompt,
+)
+from ai.schemas import CivicIssue, GeminiCivicIssueSchema, InsightPrioritizationOutput
 
 # Current working Gemini model for this project. Do not change without
 # team agreement (see README.md "AI assistants must not independently
@@ -96,3 +101,56 @@ def analyze_complaint(citizen_text: str) -> CivicIssue:
         raise ValueError("Gemini returned an empty response.")
 
     return CivicIssue.model_validate_json(response.text)
+
+
+def generate_insight_prioritization(insights: list[dict]) -> InsightPrioritizationOutput:
+    """Ask Gemini to recommend a priority order and explanation for a list
+    of already-computed, grounded civic insights.
+
+    A separate capability from analyze_complaint() above (this reasons
+    about aggregate insight data, not raw citizen text), but deliberately
+    reuses the same client plumbing (_get_client(), GEMINI_MODEL) rather
+    than standing up a second AI client.
+
+    `insights` must contain only aggregate, non-identifying fields (type,
+    priority, title, summary, affected_issue_count, evidence, department
+    code/name) -- never per-issue detail like original_text or public_id.
+    Gemini's role is strictly advisory: it reorders and explains what
+    CivicSync already computed, and never changes any Issue, assignment,
+    or status (see PRIORITIZATION_SYSTEM_PROMPT).
+
+    Args:
+        insights: A list of plain dicts, one per grounded insight.
+
+    Returns:
+        A validated InsightPrioritizationOutput instance.
+
+    Raises:
+        ValueError: if `insights` is empty, or Gemini returns an empty
+            response.
+        EnvironmentError: if GEMINI_API_KEY is not configured.
+    """
+    if not insights:
+        raise ValueError("insights must be a non-empty list.")
+
+    client = _get_client()
+
+    response = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=build_prioritization_prompt(insights),
+        config=types.GenerateContentConfig(
+            system_instruction=PRIORITIZATION_SYSTEM_PROMPT,
+            response_mime_type="application/json",
+            response_schema=InsightPrioritizationOutput,
+            temperature=0.1,
+        ),
+    )
+
+    parsed = getattr(response, "parsed", None)
+    if isinstance(parsed, InsightPrioritizationOutput):
+        return parsed
+
+    if not response.text:
+        raise ValueError("Gemini returned an empty response.")
+
+    return InsightPrioritizationOutput.model_validate_json(response.text)

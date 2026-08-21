@@ -132,3 +132,50 @@ class GeminiCivicIssueSchema(CivicIssue):
     model_config = {
         "extra": "ignore",
     }
+
+
+class InsightPrioritizationOutput(BaseModel):
+    """Gemini-facing structured output for civic-insight prioritization.
+
+    This is a NEW, separate capability from CivicIssue/GeminiCivicIssueSchema
+    above (which extract structured data from citizen complaints) -- this
+    schema is for reasoning ABOUT already-computed, grounded insights
+    (see backend/insights.py), not for extracting new facts. It reuses the
+    same Gemini client/model plumbing (ai/client.py's _get_client(),
+    GEMINI_MODEL) rather than standing up a second AI client.
+
+    extra="ignore" (not "forbid") for the same reason as
+    GeminiCivicIssueSchema: Gemini's structured-output API rejects the
+    additionalProperties JSON Schema keyword that extra="forbid" would
+    otherwise render.
+
+    Gemini is asked only to REORDER and EXPLAIN insights CivicSync already
+    computed deterministically -- it is never asked to invent new counts,
+    statistics, or insights, and its output never changes any Issue,
+    assignment, or status. See ai/prompts.py's PRIORITIZATION_SYSTEM_PROMPT
+    for the enforced boundary, and backend/service.py's
+    get_prioritized_insights() for how the output is sanitized against the
+    insights actually sent before being returned to the caller.
+    """
+
+    model_config = {"extra": "ignore"}
+
+    recommended_priority_order: list[str] = Field(
+        ...,
+        description=(
+            "The insight_type values from the provided insights, reordered "
+            "most urgent/actionable first. Must only reuse insight_type "
+            "values that were provided -- never invent a new one."
+        ),
+    )
+    summary: str = Field(
+        ..., description="One or two sentence summary of the overall prioritization."
+    )
+    explanation: str = Field(
+        ...,
+        description=(
+            "Brief explanation of why this order was chosen, referencing the "
+            "provided evidence (counts, departments, categories) directly -- "
+            "not any information beyond what was provided."
+        ),
+    )

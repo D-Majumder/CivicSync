@@ -12,16 +12,22 @@ this business logic isn't duplicated across handlers or tests. This is the
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
+from google.genai.errors import APIError
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from ai.client import analyze_complaint
+from ai.client import analyze_complaint, generate_insight_prioritization
 from ai.schemas import IssueCategory, SeverityLevel
+from backend import insights as insight_rules
 from backend.assignment_rules import DepartmentInactiveError, DepartmentNotFoundError
 from backend.models import Department, Issue, IssueStatus
 from backend.repository import (
     TERMINAL_STATUSES,
     assign_department_to_issue,
+    count_active_high_severity_issues,
+    count_active_issues_by_category,
     count_issues_by_department,
     count_issues_by_severity,
     count_issues_by_status,
@@ -48,6 +54,7 @@ from backend.schemas import (
     AdminStatusHistoryEntry,
     AgingBucketEntry,
     AgingBucketsResponse,
+    AIPrioritizationRecommendation,
     DashboardSummaryResponse,
     DepartmentIssueCount,
     DepartmentSummary,
@@ -56,6 +63,9 @@ from backend.schemas import (
     DepartmentWorkloadResponse,
     FunnelResponse,
     FunnelStage,
+    Insight,
+    InsightsResponse,
+    PrioritizedInsightsResponse,
     PublicIssueTrackingResponse,
     PublicTimelineEntry,
     RecentActivityEntry,
@@ -474,3 +484,130 @@ def get_recent_activity_feed(db: Session, limit: int = 20) -> RecentActivityResp
         for history_entry, issue in get_recent_activity(db, limit=limit)
     ]
     return RecentActivityResponse(activities=activities)
+
+
+# --- Civic Accountability & Intelligence (Milestone 10) ----------------------
+
+
+def get_civic_insights(db: Session) -> InsightsResponse:
+    """Compute every grounded, deterministic civic insight.
+
+    Purely deterministic -- never calls Gemini. Reuses existing Milestone
+    8/9 aggregate queries (count_issues_by_status, get_department_workload,
+    get_stale_issues) rather than re-querying the same data, plus two new
+    small aggregate queries (count_active_high_severity_issues,
+    count_active_issues_by_category) for signals M8/M9 didn't already
+    compute. The actual "does this data support an insight" decisions live
+    in backend/insights.py, kept separate and DB-free so those rules are
+    unit-testable without a database.
+    """
+    insights: list[Insight] = []
+
+    high_severity_insight = insight_rules.build_high_severity_insight(
+        count_active_high_severity_issues(db)
+    )
+    if high_severity_insight is not None:
+        insights.append(high_severity_insight)
+
+    department_active_counts = [
+        (
+            department.code,
+            department.name,
+            sum(count for st, count in by_status.items() if st not in TERMINAL_STATUSES),
+        )
+        for department, by_status in get_department_workload(db)
+    ]
+    insights.extend(insight_rules.build_department_concentration_insights(department_active_counts))
+
+    # Reuse the existing stale-issues query (Milestone 8) purely for its
+    # `total` -- limit=1 avoids fetching the full item list we don't need
+    # here.
+    _stale_items, stale_total = repo_get_stale_issues(db, older_than_hours=48, limit=1, offset=0)
+    stale_insight = insight_rules.build_stale_concentration_insight(
+        stale_total, older_than_hours=48
+    )
+    if stale_insight is not None:
+        insights.append(stale_insight)
+
+    category_counts = {
+        category.value: count for category, count in count_active_issues_by_category(db).items()
+    }
+    recurring_insight = insight_rules.build_recurring_category_insight(category_counts)
+    if recurring_insight is not None:
+        insights.append(recurring_insight)
+
+    bottleneck_insight = insight_rules.build_lifecycle_bottleneck_insight(
+        count_issues_by_status(db), TERMINAL_STATUSES
+    )
+    if bottleneck_insight is not None:
+        insights.append(bottleneck_insight)
+
+    return InsightsResponse(insights=insights, generated_at=datetime.now(timezone.utc))
+
+
+def get_prioritized_insights(db: Session) -> PrioritizedInsightsResponse:
+    """Compute grounded insights, then ask Gemini for an advisory priority
+    order and explanation over them.
+
+    ADVISORY ONLY: nothing here ever changes an Issue's status,
+    assignment, or any official record -- see
+    ai/prompts.py's PRIORITIZATION_SYSTEM_PROMPT for the enforced
+    boundary. Only aggregate, non-identifying insight fields are sent to
+    Gemini (never original_text, public_id, or confidence).
+
+    If there are no insights, Gemini is never called (nothing to
+    prioritize, and calling it anyway would risk fabricating a
+    recommendation with no grounding). If Gemini is unavailable, fails, or
+    returns something unusable, the grounded insights are still returned
+    with ai_recommendation=None and a sanitized ai_recommendation_error --
+    their value doesn't depend on Gemini succeeding.
+    """
+    insights_response = get_civic_insights(db)
+    if not insights_response.insights:
+        return PrioritizedInsightsResponse(
+            insights=[], ai_recommendation=None, ai_recommendation_error=None
+        )
+
+    payload = [
+        {
+            "insight_type": insight.insight_type,
+            "priority": insight.priority.value,
+            "title": insight.title,
+            "summary": insight.summary,
+            "affected_issue_count": insight.affected_issue_count,
+            "affected_department": (
+                insight.affected_department.code if insight.affected_department else None
+            ),
+            "evidence": insight.evidence,
+        }
+        for insight in insights_response.insights
+    ]
+    known_types = {insight.insight_type for insight in insights_response.insights}
+
+    try:
+        ai_output = generate_insight_prioritization(payload)
+    except (EnvironmentError, APIError, ValueError):
+        return PrioritizedInsightsResponse(
+            insights=insights_response.insights,
+            ai_recommendation=None,
+            ai_recommendation_error="AI prioritization is temporarily unavailable.",
+        )
+
+    # Sanitize against hallucinated/incomplete output: keep only
+    # insight_types we actually sent (in Gemini's order), then append any
+    # we sent that Gemini omitted. This never lets Gemini add, rename, or
+    # drop an insight -- it can only reorder what CivicSync computed.
+    sanitized_order = [t for t in ai_output.recommended_priority_order if t in known_types]
+    for insight_type in known_types:
+        if insight_type not in sanitized_order:
+            sanitized_order.append(insight_type)
+
+    return PrioritizedInsightsResponse(
+        insights=insights_response.insights,
+        ai_recommendation=AIPrioritizationRecommendation(
+            summary=ai_output.summary,
+            recommended_priority_order=sanitized_order,
+            explanation=ai_output.explanation,
+        ),
+        ai_recommendation_error=None,
+    )

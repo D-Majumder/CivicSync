@@ -8,6 +8,7 @@ for POST /api/analyze (AI-only, not persisted).
 """
 
 from datetime import datetime
+from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -459,3 +460,83 @@ class RecentActivityEntry(BaseModel):
 
 class RecentActivityResponse(BaseModel):
     activities: list[RecentActivityEntry]
+
+
+# --- Civic Accountability & Intelligence (Milestone 10) ----------------------
+#
+# Insight/AI-recommendation models are built explicitly in
+# backend/insights.py (deterministic) and backend/service.py (AI
+# orchestration) -- never from_attributes on an ORM object.
+
+
+class InsightPriority(str, Enum):
+    """How urgently an insight warrants an authority's attention. Distinct
+    from SeverityLevel (an AI-assessed property of a single issue) --
+    this is CivicSync's own assessment of an aggregate pattern."""
+
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class Insight(BaseModel):
+    """A single grounded, structured civic insight.
+
+    Every field traces back to real database aggregates computed in
+    backend/repository.py and backend/insights.py -- nothing here is
+    fabricated. `ai_generated` is always False for insights returned by
+    GET /api/admin/insights (purely deterministic); it exists so the same
+    model can, in principle, represent an AI-originated insight later
+    without a schema change, though Milestone 10 never sets it True here.
+    """
+
+    insight_type: str
+    priority: InsightPriority
+    title: str
+    summary: str
+    affected_issue_count: int
+    affected_department: DepartmentSummary | None
+    evidence: dict[str, int | float | str]
+    recommended_action: str
+    ai_generated: bool = False
+
+
+class InsightsResponse(BaseModel):
+    insights: list[Insight]
+    generated_at: datetime
+
+
+class AIPrioritizationRecommendation(BaseModel):
+    """Gemini's prioritization recommendation over already-computed,
+    grounded insights.
+
+    ADVISORY ONLY: this recommendation never changes any Issue, official
+    department assignment, or status -- an authority must take official
+    action separately through the existing lifecycle/assignment
+    endpoints. recommended_priority_order is sanitized server-side (see
+    backend.service.get_prioritized_insights) to only ever contain
+    insight_type values CivicSync actually computed, regardless of what
+    Gemini returns.
+    """
+
+    summary: str
+    recommended_priority_order: list[str]
+    explanation: str
+    ai_generated: bool = True
+
+
+class PrioritizedInsightsResponse(BaseModel):
+    """Response for POST /api/admin/insights/prioritize.
+
+    `insights` is the same grounded, deterministic list GET
+    /api/admin/insights would return -- unchanged by the AI step.
+    `ai_recommendation` is null if there were no insights to prioritize,
+    or if Gemini was unavailable/failed; in that case
+    `ai_recommendation_error` carries a sanitized (never raw-exception)
+    explanation, and the grounded insights are still returned -- their
+    value doesn't depend on Gemini succeeding.
+    """
+
+    insights: list[Insight]
+    ai_recommendation: AIPrioritizationRecommendation | None
+    ai_recommendation_error: str | None = None
