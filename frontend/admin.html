@@ -35,9 +35,12 @@
         <a href="#departments" data-view="departments">Departments</a>
         <a href="#intelligence" data-view="intelligence">Civic Intelligence</a>
       </nav>
-      <p class="type-body-sm" style="color: #8b96ab; margin-top: auto;">
-        Internal prototype — not authenticated. Do not expose publicly.
-      </p>
+      <div style="margin-top: auto;">
+        <p class="type-body-sm" style="color: #8b96ab; margin-bottom: var(--space-sm);">
+          Internal authority prototype. Session expires after 8 hours of inactivity.
+        </p>
+        <button class="btn btn-secondary" id="logout-button" type="button" style="width: 100%;">Log Out</button>
+      </div>
     </aside>
 
     <main class="authority-main">

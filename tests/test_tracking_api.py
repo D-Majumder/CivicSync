@@ -16,6 +16,7 @@ from sqlalchemy.orm import sessionmaker
 
 from ai.schemas import CivicIssue, IssueCategory, SeverityLevel
 from backend.database import Base, build_engine, get_db
+from backend.auth import get_current_authority
 from backend.main import app
 from backend.models import Department
 
@@ -59,6 +60,7 @@ def client(tmp_path):
             db.close()
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_authority] = lambda: "test-authority"
     test_client = TestClient(app)
     try:
         yield test_client
@@ -210,7 +212,8 @@ def test_all_timestamps_are_unambiguous_utc_iso_strings(client):
 def test_timestamp_round_trips_correctly_to_ist(client):
     """End-to-end proof the fix actually produces the right IST wall-clock
     time for a known UTC instant -- not just "has a Z suffix"."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
 
     created = _submit_issue(client)
     body = client.get(f"/api/track/{created['public_id']}").json()
@@ -218,7 +221,7 @@ def test_timestamp_round_trips_correctly_to_ist(client):
     parsed = datetime.fromisoformat(body["created_at"].replace("Z", "+00:00"))
     assert parsed.tzinfo is not None
 
-    ist = parsed.astimezone(timezone(timedelta(hours=5, minutes=30), name="IST"))
+    ist = parsed.astimezone(ZoneInfo("Asia/Kolkata"))
     utc = parsed.astimezone(timezone.utc)
     # IST is always exactly UTC+5:30 -- verifying the offset itself,
     # rather than hardcoding any specific clock time.

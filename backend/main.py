@@ -2,16 +2,26 @@ from pathlib import Path as FilePath
 from typing import Literal
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Path, Query, status
+from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from google.genai.errors import APIError
+from pydantic import BaseModel
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from ai.client import analyze_complaint
 from ai.schemas import CivicIssue, IssueCategory, SeverityLevel
+from backend.auth import (
+    SESSION_COOKIE_NAME,
+    SESSION_MAX_AGE_SECONDS,
+    authenticate,
+    create_session_token,
+    get_current_authority,
+    is_secure_cookie_environment,
+    verify_session_token,
+)
 from backend.assignment_rules import (
     AssignmentNotAllowedError,
     DepartmentInactiveError,
@@ -199,7 +209,7 @@ def submit_issue(request: AnalyzeRequest, db: Session = Depends(get_db)) -> Issu
     summary="Retrieve a persisted civic issue by its public id",
     responses={status.HTTP_404_NOT_FOUND: {"description": "Issue not found."}},
 )
-def read_issue(public_id: str, db: Session = Depends(get_db)) -> Issue:
+def read_issue(public_id: str, db: Session = Depends(get_db), authority: str = Depends(get_current_authority)) -> Issue:
     """Look up a previously submitted Issue. Does not call Gemini."""
     issue = get_issue_by_public_id(db, public_id)
     if issue is None:
@@ -223,7 +233,7 @@ def read_issue(public_id: str, db: Session = Depends(get_db)) -> Issue:
     },
 )
 def update_issue_status(
-    public_id: str, request: StatusUpdateRequest, db: Session = Depends(get_db)
+    public_id: str, request: StatusUpdateRequest, db: Session = Depends(get_db), authority: str = Depends(get_current_authority)
 ) -> Issue:
     """Validate and apply a status transition, recording status history.
 
@@ -261,7 +271,7 @@ def update_issue_status(
     responses={status.HTTP_404_NOT_FOUND: {"description": "Issue not found."}},
 )
 def read_issue_status_history(
-    public_id: str, db: Session = Depends(get_db)
+    public_id: str, db: Session = Depends(get_db), authority: str = Depends(get_current_authority)
 ) -> list[StatusHistoryEntryResponse]:
     """Return an Issue's status history, oldest first. Does not call Gemini."""
     issue = get_issue_by_public_id(db, public_id)
@@ -301,7 +311,7 @@ def list_departments(db: Session = Depends(get_db)) -> list[Department]:
     },
 )
 def assign_issue(
-    public_id: str, request: AssignmentRequest, db: Session = Depends(get_db)
+    public_id: str, request: AssignmentRequest, db: Session = Depends(get_db), authority: str = Depends(get_current_authority)
 ) -> Issue:
     """Assign an issue to an official Department from the registry.
 
@@ -352,7 +362,7 @@ def assign_issue(
     summary="Get the current official department assignment for an issue",
     responses={status.HTTP_404_NOT_FOUND: {"description": "Issue not found."}},
 )
-def read_current_assignment(public_id: str, db: Session = Depends(get_db)):
+def read_current_assignment(public_id: str, db: Session = Depends(get_db), authority: str = Depends(get_current_authority)):
     """Return the current assignment, or a bare `200` with JSON `null` if
     the issue exists but has never been assigned -- that's a normal,
     expected state, not an error. 404 only if the issue itself doesn't
@@ -382,7 +392,7 @@ def read_current_assignment(public_id: str, db: Session = Depends(get_db)):
     responses={status.HTTP_404_NOT_FOUND: {"description": "Issue not found."}},
 )
 def read_assignment_history(
-    public_id: str, db: Session = Depends(get_db)
+    public_id: str, db: Session = Depends(get_db), authority: str = Depends(get_current_authority)
 ) -> list[AssignmentHistoryEntryResponse]:
     """Return all assignment history entries, oldest first. Does not call
     Gemini."""
@@ -503,6 +513,7 @@ def list_admin_issues_route(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
+    authority: str = Depends(get_current_authority),
 ) -> AdminIssueListResponse:
     result = list_admin_issues(
         db,
@@ -554,6 +565,7 @@ def list_stale_issues_route(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
+    authority: str = Depends(get_current_authority),
 ) -> AdminIssueListResponse:
     result = list_stale_issues(
         db,
@@ -586,7 +598,7 @@ def list_stale_issues_route(
     ),
     responses={status.HTTP_404_NOT_FOUND: {"description": "No issue found with that public id."}},
 )
-def read_admin_issue_detail(public_id: str, db: Session = Depends(get_db)) -> AdminIssueDetailResponse:
+def read_admin_issue_detail(public_id: str, db: Session = Depends(get_db), authority: str = Depends(get_current_authority)) -> AdminIssueDetailResponse:
     detail = get_admin_issue_detail(db, public_id)
     if detail is None:
         raise HTTPException(
@@ -619,6 +631,7 @@ def read_dashboard_summary(
         ),
     ),
     db: Session = Depends(get_db),
+    authority: str = Depends(get_current_authority),
 ) -> DashboardSummaryResponse:
     summary = get_dashboard_summary(db, jurisdiction_code=jurisdiction_code)
     if summary is None:
@@ -645,7 +658,7 @@ def read_dashboard_summary(
     },
 )
 def read_department_summary(
-    department_code: str, db: Session = Depends(get_db)
+    department_code: str, db: Session = Depends(get_db), authority: str = Depends(get_current_authority)
 ) -> DepartmentSummaryResponse:
     summary = get_department_summary(db, department_code)
     if summary is None:
@@ -681,6 +694,7 @@ def read_operational_queue(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
+    authority: str = Depends(get_current_authority),
 ) -> AdminIssueListResponse:
     result = list_operational_queue(
         db,
@@ -719,7 +733,7 @@ def read_operational_queue(
         "Gemini."
     ),
 )
-def read_status_funnel(db: Session = Depends(get_db)) -> FunnelResponse:
+def read_status_funnel(db: Session = Depends(get_db), authority: str = Depends(get_current_authority)) -> FunnelResponse:
     return get_status_funnel(db)
 
 
@@ -734,7 +748,7 @@ def read_status_funnel(db: Session = Depends(get_db)) -> FunnelResponse:
         "enum only (no second severity vocabulary). Never calls Gemini."
     ),
 )
-def read_severity_distribution(db: Session = Depends(get_db)) -> SeverityDistributionResponse:
+def read_severity_distribution(db: Session = Depends(get_db), authority: str = Depends(get_current_authority)) -> SeverityDistributionResponse:
     return get_severity_distribution(db)
 
 
@@ -751,7 +765,7 @@ def read_severity_distribution(db: Session = Depends(get_db)) -> SeverityDistrib
         "no N+1. Never calls Gemini."
     ),
 )
-def read_department_workload(db: Session = Depends(get_db)) -> DepartmentWorkloadResponse:
+def read_department_workload(db: Session = Depends(get_db), authority: str = Depends(get_current_authority)) -> DepartmentWorkloadResponse:
     return get_department_workload_summary(db)
 
 
@@ -768,7 +782,7 @@ def read_department_workload(db: Session = Depends(get_db)) -> DepartmentWorkloa
         "'overdue'. Never calls Gemini."
     ),
 )
-def read_aging_buckets(db: Session = Depends(get_db)) -> AgingBucketsResponse:
+def read_aging_buckets(db: Session = Depends(get_db), authority: str = Depends(get_current_authority)) -> AgingBucketsResponse:
     return get_aging_buckets(db)
 
 
@@ -785,7 +799,7 @@ def read_aging_buckets(db: Session = Depends(get_db)) -> AgingBucketsResponse:
         "Gemini."
     ),
 )
-def read_resolution_timing(db: Session = Depends(get_db)) -> ResolutionTimingResponse:
+def read_resolution_timing(db: Session = Depends(get_db), authority: str = Depends(get_current_authority)) -> ResolutionTimingResponse:
     return get_resolution_timing(db)
 
 
@@ -802,7 +816,7 @@ def read_resolution_timing(db: Session = Depends(get_db)) -> ResolutionTimingRes
 )
 def read_recent_activity(
     limit: int = Query(default=20, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db), authority: str = Depends(get_current_authority),
 ) -> RecentActivityResponse:
     return get_recent_activity_feed(db, limit=limit)
 
@@ -841,7 +855,7 @@ def read_recent_activity(
         "Gemini."
     ),
 )
-def read_civic_insights(db: Session = Depends(get_db)) -> InsightsResponse:
+def read_civic_insights(db: Session = Depends(get_db), authority: str = Depends(get_current_authority)) -> InsightsResponse:
     return get_civic_insights(db)
 
 
@@ -864,7 +878,7 @@ def read_civic_insights(db: Session = Depends(get_db)) -> InsightsResponse:
         "than failing the whole request."
     ),
 )
-def prioritize_civic_insights(db: Session = Depends(get_db)) -> PrioritizedInsightsResponse:
+def prioritize_civic_insights(db: Session = Depends(get_db), authority: str = Depends(get_current_authority)) -> PrioritizedInsightsResponse:
     return get_prioritized_insights(db)
 
 
@@ -905,7 +919,7 @@ def prioritize_civic_insights(db: Session = Depends(get_db)) -> PrioritizedInsig
     ),
     responses={status.HTTP_404_NOT_FOUND: {"description": "No issue found with that public id."}},
 )
-def explain_issue_with_ai(public_id: str, db: Session = Depends(get_db)) -> IssueExplanationResponse:
+def explain_issue_with_ai(public_id: str, db: Session = Depends(get_db), authority: str = Depends(get_current_authority)) -> IssueExplanationResponse:
     result = get_issue_ai_explanation(db, public_id)
     if result is None:
         raise HTTPException(
@@ -964,6 +978,7 @@ def generate_operational_briefing_route(
         default=None, description="Optional: narrow the briefing to a single department."
     ),
     db: Session = Depends(get_db),
+    authority: str = Depends(get_current_authority),
 ) -> OperationalBriefingResponse:
     result = get_operational_briefing(
         db, jurisdiction_code=jurisdiction_code, department_code=department_code
@@ -1069,8 +1084,85 @@ def serve_track_page_with_id(public_id: str) -> FileResponse:
 
 
 @app.get("/admin", include_in_schema=False)
-def serve_admin_placeholder() -> FileResponse:
+def serve_admin_placeholder(request: Request) -> Response:
+    # Server-side gate, not frontend hiding: the page itself is only ever
+    # served to a request carrying a valid, signed, unexpired session
+    # cookie. An unauthenticated browser is redirected to the real login
+    # page -- it never even receives admin.html's markup.
+    username = verify_session_token(request.cookies.get(SESSION_COOKIE_NAME))
+    if username is None:
+        return RedirectResponse(url="/authority/login", status_code=status.HTTP_302_FOUND)
     return FileResponse(_FRONTEND_DIR / "admin.html")
+
+
+@app.get("/authority/login", include_in_schema=False)
+def serve_authority_login(request: Request) -> Response:
+    # Already-authenticated visitors skip straight to the Command Center
+    # rather than seeing a redundant login form.
+    username = verify_session_token(request.cookies.get(SESSION_COOKIE_NAME))
+    if username is not None:
+        return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
+    return FileResponse(_FRONTEND_DIR / "authority-login.html")
+
+
+# ============================================================================
+# Authority authentication (Milestone 16-A)
+#
+# ONE demo authority account, configured entirely via environment
+# variables (AUTHORITY_USERNAME, AUTHORITY_PASSWORD_HASH, SESSION_SECRET)
+# -- see backend/auth.py. No new database table, no migration. Login/
+# logout are the only two UNAUTHENTICATED routes in this section; every
+# other /api/admin/* route (and the assignment/status mutation routes)
+# requires Depends(get_current_authority), added below.
+# ============================================================================
+
+
+class AuthorityLoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+@app.post(
+    "/api/authority/login",
+    status_code=status.HTTP_200_OK,
+    summary="Authority login",
+    description=(
+        "Authenticates against the single configured demo authority "
+        "account. On success, sets an HttpOnly, signed session cookie "
+        "and returns {\"success\": true}. On failure, returns 401 with a "
+        "generic 'invalid username or password' message -- never "
+        "revealing which field was wrong. The password hash and session "
+        "signing secret are never sent to the client in any form."
+    ),
+)
+def authority_login(payload: AuthorityLoginRequest, response: Response) -> dict:
+    if not authenticate(payload.username, payload.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password.",
+        )
+    token = create_session_token(payload.username)
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=token,
+        max_age=SESSION_MAX_AGE_SECONDS,
+        httponly=True,
+        samesite="lax",
+        secure=is_secure_cookie_environment(),
+        path="/",
+    )
+    return {"success": True}
+
+
+@app.post(
+    "/api/authority/logout",
+    status_code=status.HTTP_200_OK,
+    summary="Authority logout",
+    description="Clears the authority session cookie. Always succeeds, even if not logged in.",
+)
+def authority_logout(response: Response) -> dict:
+    response.delete_cookie(key=SESSION_COOKIE_NAME, path="/")
+    return {"success": True}
 
 
 # Everything else under /static/* (CSS, JS, the logo) -- mounted last so it

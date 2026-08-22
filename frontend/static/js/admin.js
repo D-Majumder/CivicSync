@@ -910,6 +910,16 @@
     }
   }
 
+  document.getElementById('logout-button').addEventListener('click', async () => {
+    try {
+      await CivicSyncApi.authorityLogout();
+    } catch (err) {
+      // Even if the logout call itself fails, still send the user to the
+      // login page -- there's nothing useful to do with the error here.
+    }
+    window.location.href = '/authority/login';
+  });
+
   // --- Boot --------------------------------------------------------------------------
   //
   // Jurisdiction context is awaited BEFORE the first view loads, so even

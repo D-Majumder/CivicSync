@@ -70,6 +70,19 @@ async function request(path, options = {}) {
     return body;
   }
 
+  if (response.status === 401) {
+    // A genuinely expired/invalid authority session while using an
+    // already-loaded admin page -- redirect to login. NEVER redirect for
+    // a failed login attempt itself (that 401 is the login form's own
+    // "wrong password" signal, handled inline by the login page), and
+    // never redirect if already on the login page.
+    const isLoginRequest = path.startsWith('/api/authority/login');
+    const alreadyOnLoginPage = window.location.pathname === '/authority/login';
+    if (!isLoginRequest && !alreadyOnLoginPage) {
+      window.location.href = '/authority/login';
+    }
+    throw new ApiError('unauthenticated', safeDetail(body, 'Authority login required.'), 401);
+  }
   if (response.status === 404) {
     throw new ApiError('not_found', safeDetail(body, 'Not found.'), 404);
   }
@@ -112,6 +125,23 @@ function toQueryString(params) {
 
 const CivicSyncApi = {
   ApiError,
+
+  /**
+   * Authority login (Milestone 16-A). On success, the server sets an
+   * HttpOnly session cookie -- this function never sees or stores the
+   * cookie value itself, the browser handles that transparently.
+   */
+  authorityLogin(username, password) {
+    return request('/api/authority/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    });
+  },
+
+  /** Clears the authority session cookie server-side. */
+  authorityLogout() {
+    return request('/api/authority/logout', { method: 'POST' });
+  },
 
   /**
    * Submit a citizen complaint. One backend request: Gemini analysis +

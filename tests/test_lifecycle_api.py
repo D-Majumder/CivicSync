@@ -16,6 +16,7 @@ from sqlalchemy.orm import sessionmaker
 
 from ai.schemas import CivicIssue, IssueCategory, SeverityLevel
 from backend.database import Base, build_engine, get_db
+from backend.auth import get_current_authority
 from backend.main import app
 
 
@@ -46,6 +47,7 @@ def client(tmp_path):
             db.close()
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_authority] = lambda: "test-authority"
     test_client = TestClient(app)
     try:
         yield test_client
