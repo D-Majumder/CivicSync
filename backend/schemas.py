@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Annotated, Any
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
 
 from ai.schemas import IssueCategory, SeverityLevel
 from backend.models import IssueStatus, JurisdictionLevel, ReopenRequestState
@@ -51,6 +51,15 @@ class AnalyzeRequest(BaseModel):
 
     Both endpoints start from the same citizen-complaint text, so this one
     model covers both requests.
+
+    latitude/longitude/accuracy (Milestone 21) are entirely OPTIONAL --
+    submission never requires them, and their absence never blocks or
+    degrades submission in any way. When present, they represent the
+    LOCATION OF THE REPORTED CIVIC PROBLEM (captured via the citizen's
+    device geolocation, with their explicit action), not necessarily the
+    citizen's own home or current location. Range-validated here so a
+    malformed/out-of-range client value is rejected (422) before ever
+    reaching the database -- never silently clamped or trusted as-is.
     """
 
     text: str = Field(
@@ -59,6 +68,35 @@ class AnalyzeRequest(BaseModel):
         description="Raw citizen complaint text (voice-transcribed or typed) to analyze.",
         examples=["There has been no street light near our school for two weeks."],
     )
+    latitude: float | None = Field(
+        default=None,
+        ge=-90,
+        le=90,
+        description="Optional citizen-captured latitude of the reported problem's location.",
+    )
+    longitude: float | None = Field(
+        default=None,
+        ge=-180,
+        le=180,
+        description="Optional citizen-captured longitude of the reported problem's location.",
+    )
+    accuracy: float | None = Field(
+        default=None,
+        ge=0,
+        description="Optional browser-reported GPS accuracy in meters, if the device supplied one.",
+    )
+
+    @model_validator(mode="after")
+    def _require_both_coordinates_or_neither(self) -> "AnalyzeRequest":
+        if (self.latitude is None) != (self.longitude is None):
+            raise ValueError(
+                "latitude and longitude must both be provided together, or both omitted."
+            )
+        if self.accuracy is not None and self.latitude is None:
+            raise ValueError(
+                "accuracy requires latitude and longitude to also be provided."
+            )
+        return self
 
 
 class DepartmentSummary(BaseModel):
@@ -102,6 +140,9 @@ class IssueResponse(BaseModel):
     status: IssueStatus
     resolution_summary: str | None
     resolved_by: str | None
+    latitude: float | None
+    longitude: float | None
+    location_accuracy: float | None
     created_at: UtcDatetime
     updated_at: UtcDatetime
     resolved_at: UtcDatetime | None
@@ -491,6 +532,9 @@ class AdminIssueDetailResponse(BaseModel):
     status_label: str
     resolution_summary: str | None
     resolved_by: str | None
+    latitude: float | None
+    longitude: float | None
+    location_accuracy: float | None
     created_at: UtcDatetime
     updated_at: UtcDatetime
     resolved_at: UtcDatetime | None

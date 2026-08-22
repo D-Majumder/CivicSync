@@ -151,11 +151,25 @@ const CivicSyncApi = {
    * persistence happen server-side as a single call -- there is no
    * separate "classify" step the frontend triggers independently.
    * Returns the created Issue (IssueResponse shape).
+   *
+   * `location` (Milestone 21) is entirely optional -- omit it or pass
+   * null/undefined for a normal text-only submission. When present, it
+   * represents the location of the REPORTED PROBLEM (captured via the
+   * citizen's device geolocation, with their explicit action), not
+   * necessarily the citizen's own location.
    */
-  submitIssue(text) {
+  submitIssue(text, location) {
+    const body = { text };
+    if (location && location.latitude != null && location.longitude != null) {
+      body.latitude = location.latitude;
+      body.longitude = location.longitude;
+      if (location.accuracy != null) {
+        body.accuracy = location.accuracy;
+      }
+    }
     return request('/api/issues', {
       method: 'POST',
-      body: JSON.stringify({ text }),
+      body: JSON.stringify(body),
     });
   },
 

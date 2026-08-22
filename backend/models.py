@@ -96,14 +96,22 @@ class Issue(Base):
     )
     problem: Mapped[str] = mapped_column(Text, nullable=False)
     location: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    # Structured coordinates (Milestone 20) -- independent of the free-text
-    # `location` field above (an AI-extracted description, e.g. "near the
-    # school"). Nullable: no citizen-facing capture flow exists yet for
-    # these, so every pre-existing issue has NULL here, and hotspot
-    # detection (backend/hotspots.py) simply excludes issues without both
-    # values set -- never fabricated or geocoded from the free-text field.
+    # Structured coordinates (Milestone 20, populated by citizen device
+    # geolocation capture as of Milestone 21) -- independent of the
+    # free-text `location` field above (an AI-extracted description,
+    # e.g. "near the school"). Nullable: capture is optional and a
+    # citizen may decline/lack location permission, so every issue
+    # submitted without it (and every issue that predates Milestone 21)
+    # has NULL here -- hotspot detection (backend/hotspots.py) simply
+    # excludes issues without both values set, never fabricated or
+    # geocoded from the free-text field.
     latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Browser-reported GPS accuracy in meters (Milestone 21), when the
+    # citizen's device supplies one -- never fabricated if the browser
+    # doesn't report it. Independent of whether coordinates were
+    # captured at all; always NULL if latitude/longitude are NULL.
+    location_accuracy: Mapped[float | None] = mapped_column(Float, nullable=True)
     duration: Mapped[str | None] = mapped_column(String(255), nullable=True)
     severity: Mapped[SeverityLevel] = mapped_column(
         SAEnum(

@@ -201,7 +201,13 @@ def submit_issue(request: AnalyzeRequest, db: Session = Depends(get_db)) -> Issu
     delegates, and translates known failure modes into HTTP responses.
     """
     try:
-        return submit_complaint(db, request.text)
+        return submit_complaint(
+            db,
+            request.text,
+            latitude=request.latitude,
+            longitude=request.longitude,
+            location_accuracy=request.accuracy,
+        )
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

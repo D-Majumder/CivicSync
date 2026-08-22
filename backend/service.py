@@ -130,7 +130,14 @@ def _department_summary(department: Department | None) -> DepartmentSummary | No
     return DepartmentSummary(code=department.code, name=department.name)
 
 
-def submit_complaint(db: Session, text: str) -> Issue:
+def submit_complaint(
+    db: Session,
+    text: str,
+    *,
+    latitude: float | None = None,
+    longitude: float | None = None,
+    location_accuracy: float | None = None,
+) -> Issue:
     """Analyze citizen complaint text and persist the result as an Issue.
 
     Every new Issue is scoped to the environment-configured default
@@ -138,6 +145,13 @@ def submit_complaint(db: Session, text: str) -> Issue:
     backend.repository.get_default_jurisdiction_id. This is resolved
     FIRST, before calling Gemini, so a misconfigured deployment fails
     fast without spending an AI call it would have to discard anyway.
+
+    latitude/longitude/location_accuracy (Milestone 21) are entirely
+    optional and default to None -- passed straight through to
+    create_issue_from_civic_issue, already range-validated at the schema
+    layer (backend/schemas.py's AnalyzeRequest) before this function is
+    ever called. Coordinates never affect jurisdiction resolution,
+    Gemini's analysis, or anything else in this function.
 
     Exceptions from get_default_jurisdiction_id or analyze_complaint
     (ValueError, EnvironmentError, google.genai.errors.APIError)
@@ -151,7 +165,14 @@ def submit_complaint(db: Session, text: str) -> Issue:
     civic_issue = analyze_complaint(text)
 
     try:
-        return create_issue_from_civic_issue(db, civic_issue, jurisdiction_id)
+        return create_issue_from_civic_issue(
+            db,
+            civic_issue,
+            jurisdiction_id,
+            latitude=latitude,
+            longitude=longitude,
+            location_accuracy=location_accuracy,
+        )
     except SQLAlchemyError:
         db.rollback()
         raise
@@ -520,6 +541,9 @@ def get_admin_issue_detail(db: Session, public_id: str) -> AdminIssueDetailRespo
         status_label=_status_label(issue.status),
         resolution_summary=issue.resolution_summary,
         resolved_by=issue.resolved_by,
+        latitude=issue.latitude,
+        longitude=issue.longitude,
+        location_accuracy=issue.location_accuracy,
         created_at=issue.created_at,
         updated_at=issue.updated_at,
         resolved_at=issue.resolved_at,

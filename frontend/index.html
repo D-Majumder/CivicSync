@@ -66,6 +66,29 @@
                     <p class="field-error" id="complaint-error"></p>
                   </div>
 
+                  <div class="field" id="location-field-wrap">
+                    <label>Location of the problem <span class="field-hint" style="display:inline;">(optional)</span></label>
+                    <button type="button" class="btn btn-secondary" id="use-location-button">
+                      <span id="use-location-button-label">Use my current location</span>
+                    </button>
+                    <p class="field-hint" id="location-status" style="margin-top: 8px;">
+                      Location not captured. This is optional and never blocks submission.
+                    </p>
+                    <div id="location-adjust-wrap" hidden style="margin-top: 8px; gap: 8px; flex-wrap: wrap;">
+                      <div style="flex: 1 1 120px; min-width: 0;">
+                        <label for="location-lat-input" class="field-hint">Latitude</label>
+                        <input type="number" step="any" id="location-lat-input" min="-90" max="90" style="width: 100%; box-sizing: border-box;" />
+                      </div>
+                      <div style="flex: 1 1 120px; min-width: 0;">
+                        <label for="location-lng-input" class="field-hint">Longitude</label>
+                        <input type="number" step="any" id="location-lng-input" min="-180" max="180" style="width: 100%; box-sizing: border-box;" />
+                      </div>
+                      <div style="flex-basis: 100%;">
+                        <button type="button" class="btn btn-secondary" id="clear-location-button">Clear location</button>
+                      </div>
+                    </div>
+                  </div>
+
                   <div id="form-notice" class="notice notice-error" hidden></div>
 
                   <button type="submit" class="btn btn-primary btn-block" id="submit-button">

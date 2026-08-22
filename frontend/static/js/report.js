@@ -56,7 +56,19 @@
 
   const departmentListEl = document.getElementById('department-list');
 
+  const useLocationButton = document.getElementById('use-location-button');
+  const useLocationButtonLabel = document.getElementById('use-location-button-label');
+  const locationStatus = document.getElementById('location-status');
+  const locationAdjustWrap = document.getElementById('location-adjust-wrap');
+  const locationLatInput = document.getElementById('location-lat-input');
+  const locationLngInput = document.getElementById('location-lng-input');
+  const clearLocationButton = document.getElementById('clear-location-button');
+
   let lastCreatedIssue = null;
+  // The captured/adjusted location, or null if none. Only ever set by an
+  // explicit citizen action (clicking "Use my current location" and/or
+  // editing the resulting fields) -- never fabricated, never defaulted.
+  let capturedLocation = null;
 
   // --- View switching -----------------------------------------------------------
 
@@ -202,6 +214,100 @@
     trackButton.setAttribute('href', `/track/${encodeURIComponent(issue.public_id)}`);
   }
 
+  // --- Location capture (Milestone 21) -----------------------------------------
+  //
+  // Uses the browser's native Geolocation API only -- no third-party
+  // location service, no map SDK. Entirely optional: permission denial,
+  // an unavailable position, or simply never clicking the button all
+  // leave the complaint fully submit-able, exactly like before this
+  // milestone. The captured location represents the LOCATION OF THE
+  // REPORTED PROBLEM, not necessarily the citizen's own location -- nothing
+  // here implies otherwise to the citizen.
+
+  function setLocationStatus(text, isError) {
+    locationStatus.textContent = text;
+    locationStatus.style.color = isError ? 'var(--color-error)' : '';
+  }
+
+  function showCapturedLocation(lat, lng, accuracyMeters) {
+    capturedLocation = { latitude: lat, longitude: lng, accuracy: accuracyMeters ?? null };
+    locationLatInput.value = lat.toFixed(6);
+    locationLngInput.value = lng.toFixed(6);
+    locationAdjustWrap.style.display = 'flex';
+    locationAdjustWrap.hidden = false;
+    const accuracyText =
+      accuracyMeters != null ? ` (accuracy \u00b1${Math.round(accuracyMeters)}m)` : '';
+    setLocationStatus(`Location captured${accuracyText}. You can adjust it below if needed.`, false);
+  }
+
+  useLocationButton.addEventListener('click', () => {
+    if (!('geolocation' in navigator)) {
+      setLocationStatus(
+        'Location is not supported by this browser. You can still submit your report.',
+        true
+      );
+      return;
+    }
+
+    useLocationButton.disabled = true;
+    useLocationButtonLabel.textContent = 'Locating\u2026';
+    setLocationStatus('Requesting your location\u2026', false);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        useLocationButton.disabled = false;
+        useLocationButtonLabel.textContent = 'Use my current location';
+        showCapturedLocation(
+          position.coords.latitude,
+          position.coords.longitude,
+          position.coords.accuracy
+        );
+      },
+      (error) => {
+        useLocationButton.disabled = false;
+        useLocationButtonLabel.textContent = 'Use my current location';
+        capturedLocation = null;
+        // PERMISSION_DENIED = 1, POSITION_UNAVAILABLE = 2, TIMEOUT = 3 --
+        // every case still leaves the complaint fully submit-able.
+        if (error.code === error.PERMISSION_DENIED) {
+          setLocationStatus(
+            'Location permission was denied. You can still submit your report without it.',
+            true
+          );
+        } else {
+          setLocationStatus(
+            'Location is currently unavailable. You can still submit your report without it.',
+            true
+          );
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  });
+
+  // Manual adjustment: editing the fields directly updates the captured
+  // location that will be submitted (still entirely optional, and only
+  // ever set from what the citizen has actually entered).
+  function handleManualLocationEdit() {
+    const lat = parseFloat(locationLatInput.value);
+    const lng = parseFloat(locationLngInput.value);
+    if (Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      capturedLocation = { latitude: lat, longitude: lng, accuracy: capturedLocation ? capturedLocation.accuracy : null };
+    } else {
+      capturedLocation = null;
+    }
+  }
+  locationLatInput.addEventListener('input', handleManualLocationEdit);
+  locationLngInput.addEventListener('input', handleManualLocationEdit);
+
+  clearLocationButton.addEventListener('click', () => {
+    capturedLocation = null;
+    locationLatInput.value = '';
+    locationLngInput.value = '';
+    locationAdjustWrap.hidden = true;
+    setLocationStatus('Location not captured. This is optional and never blocks submission.', false);
+  });
+
   // --- Submit handler ---------------------------------------------------------------
 
   form.addEventListener('submit', async (event) => {
@@ -223,7 +329,7 @@
     const startedAt = Date.now();
 
     try {
-      const issue = await CivicSyncApi.submitIssue(text);
+      const issue = await CivicSyncApi.submitIssue(text, capturedLocation);
       const elapsed = Date.now() - startedAt;
       if (elapsed < MIN_ANALYSIS_DISPLAY_MS) {
         await wait(MIN_ANALYSIS_DISPLAY_MS - elapsed);
