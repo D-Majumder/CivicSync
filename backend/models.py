@@ -183,6 +183,14 @@ class Issue(Base):
     # output.
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The authenticated authority identity (the session username -- see
+    # backend/auth.py's get_current_authority) that resolved this issue,
+    # via POST /api/issues/{public_id}/resolve (Milestone 18, Phase 2).
+    # Nullable: unset until an actual resolution happens, and stays NULL
+    # for issues that were never resolved through that endpoint. Never
+    # set by AI, and never accepted from request input -- always the
+    # server-side authenticated identity.
+    resolved_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Append-only audit trail of status transitions, most recent last.
     # See IssueStatusHistory below.

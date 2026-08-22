@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Annotated, Any
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator
 
 from ai.schemas import IssueCategory, SeverityLevel
 from backend.models import IssueStatus, JurisdictionLevel
@@ -101,6 +101,7 @@ class IssueResponse(BaseModel):
     assigned_department: DepartmentSummary | None
     status: IssueStatus
     resolution_summary: str | None
+    resolved_by: str | None
     created_at: UtcDatetime
     updated_at: UtcDatetime
     resolved_at: UtcDatetime | None
@@ -123,6 +124,40 @@ class StatusUpdateRequest(BaseModel):
         description="Optional human-readable reason for this transition.",
         examples=["Repair crew has started replacing the damaged light."],
     )
+
+
+class ResolveIssueRequest(BaseModel):
+    """Request body for POST /api/issues/{public_id}/resolve (Milestone
+    18, Phase 2).
+
+    Deliberately narrower than StatusUpdateRequest: this endpoint only
+    ever transitions an issue to RESOLVED (enforced server-side by the
+    same backend.transitions validator the generic status endpoint uses
+    -- an issue not currently IN_PROGRESS is rejected with 400, the same
+    as any other illegal transition), and `resolution_note` is REQUIRED
+    and validated as meaningful, unlike the generic endpoint's optional
+    `reason`. There is no client-supplied timestamp or resolver identity
+    field here on purpose -- resolved_at and resolved_by are always
+    server-generated (see backend/service.py's resolve_issue).
+    """
+
+    resolution_note: str = Field(
+        ...,
+        min_length=3,
+        max_length=2000,
+        description="Required description of how the issue was actually resolved.",
+        examples=["Repair crew replaced the damaged street light fixture on-site."],
+    )
+
+    @field_validator("resolution_note")
+    @classmethod
+    def _reject_whitespace_only(cls, value: str) -> str:
+        stripped = value.strip()
+        if len(stripped) < 3:
+            raise ValueError(
+                "resolution_note must contain a meaningful description, not just whitespace."
+            )
+        return stripped
 
 
 class StatusHistoryEntryResponse(BaseModel):
@@ -341,6 +376,7 @@ class AdminIssueDetailResponse(BaseModel):
     status: IssueStatus
     status_label: str
     resolution_summary: str | None
+    resolved_by: str | None
     created_at: UtcDatetime
     updated_at: UtcDatetime
     resolved_at: UtcDatetime | None

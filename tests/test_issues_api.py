@@ -147,6 +147,7 @@ def test_submit_issue_response_includes_all_public_fields(client):
         "assigned_department",
         "status",
         "resolution_summary",
+        "resolved_by",
         "created_at",
         "updated_at",
         "resolved_at",

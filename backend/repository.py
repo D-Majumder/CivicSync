@@ -203,6 +203,41 @@ def transition_issue_status(
     return issue
 
 
+def resolve_issue(db: Session, issue: Issue, resolution_note: str, resolved_by: str) -> Issue:
+    """Apply the authority resolution workflow (Milestone 18, Phase 2):
+    record who resolved the issue and how, then transition it to
+    RESOLVED -- as ONE atomic operation.
+
+    Reuses _apply_validated_status_transition (the exact same primitive
+    transition_issue_status above uses) to perform the actual status
+    change, so IN_PROGRESS -> RESOLVED legality is enforced by the same
+    single authoritative validator as every other transition in the
+    system -- this function does not duplicate or bypass that check.
+
+    Order matters for atomicity: validate_transition() is checked FIRST,
+    before resolution_summary/resolved_by are touched at all, so a call
+    against an issue that isn't currently IN_PROGRESS raises
+    InvalidTransitionError with NOTHING mutated on the Issue object --
+    not even in memory -- and nothing committed. (autoflush is disabled
+    on this project's sessions -- see backend/database.py -- so even if
+    order were reversed, nothing would reach the database before an
+    explicit commit; checking first is an extra, deliberate safety
+    margin against that assumption ever changing.)
+
+    Raises InvalidTransitionError if the issue is not currently
+    IN_PROGRESS. Raises SQLAlchemyError on persistence failure; the
+    caller (service layer) is responsible for rolling back the session.
+    """
+    validate_transition(issue.status, IssueStatus.RESOLVED)
+
+    issue.resolution_summary = resolution_note
+    issue.resolved_by = resolved_by
+    _apply_validated_status_transition(db, issue, IssueStatus.RESOLVED, reason=resolution_note)
+    db.commit()
+    db.refresh(issue)
+    return issue
+
+
 def get_status_history(db: Session, issue: Issue) -> list[IssueStatusHistory]:
     """Return an Issue's status history, oldest first."""
     return (

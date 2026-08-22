@@ -59,6 +59,7 @@ from backend.schemas import (
     PublicIssueTrackingResponse,
     RecentActivityResponse,
     ResolutionTimingResponse,
+    ResolveIssueRequest,
     SeverityDistributionResponse,
     StatusHistoryEntryResponse,
     StatusUpdateRequest,
@@ -84,6 +85,7 @@ from backend.service import (
     list_admin_issues,
     list_operational_queue,
     list_stale_issues,
+    resolve_issue,
     submit_complaint,
     transition_issue,
 )
@@ -253,6 +255,64 @@ def update_issue_status(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update issue status. Please try again.",
+        ) from None
+
+    if issue is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Issue not found.",
+        )
+    return issue
+
+
+@app.post(
+    "/api/issues/{public_id}/resolve",
+    response_model=IssueResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Authority resolution workflow (Milestone 18, Phase 2)",
+    description=(
+        "Records the resolution note and resolving authority identity, "
+        "then transitions the issue to RESOLVED -- as one atomic "
+        "operation. Only permitted from IN_PROGRESS (enforced by the "
+        "same backend.transitions validator the generic status endpoint "
+        "uses); any other current status is rejected with 400. "
+        "resolved_at and the resolving authority's identity are always "
+        "server-generated -- never accepted from the request body."
+    ),
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Issue not found."},
+        status.HTTP_400_BAD_REQUEST: {
+            "description": "The issue is not currently IN_PROGRESS, so it cannot be resolved."
+        },
+    },
+)
+def resolve_issue_route(
+    public_id: str,
+    request: ResolveIssueRequest,
+    db: Session = Depends(get_db),
+    authority: str = Depends(get_current_authority),
+) -> Issue:
+    """Validate and apply the authority resolution workflow.
+
+    Transition legality (IN_PROGRESS -> RESOLVED only) is enforced by
+    backend/transitions.py's validate_transition -- the same single
+    authoritative mechanism the generic status endpoint above uses, not
+    a separate/duplicated check. resolved_by is the authenticated
+    session's own identity (the `authority` dependency's return value),
+    never taken from the request. Does not call Gemini -- AI never
+    drives status transitions or resolution.
+    """
+    try:
+        issue = resolve_issue(db, public_id, request.resolution_note, resolved_by=authority)
+    except InvalidTransitionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from None
+    except SQLAlchemyError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to resolve issue. Please try again.",
         ) from None
 
     if issue is None:

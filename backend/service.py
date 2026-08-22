@@ -54,6 +54,7 @@ from backend.repository import (
     get_stale_issues as repo_get_stale_issues,
     get_status_history,
     list_issues_for_admin,
+    resolve_issue as repo_resolve_issue,
     transition_issue_status,
 )
 from backend.schemas import (
@@ -149,6 +150,34 @@ def transition_issue(
 
     try:
         return transition_issue_status(db, issue, to_status, reason)
+    except SQLAlchemyError:
+        db.rollback()
+        raise
+
+
+def resolve_issue(
+    db: Session, public_id: str, resolution_note: str, resolved_by: str
+) -> Issue | None:
+    """Look up an Issue by public_id and apply the authority resolution
+    workflow (Milestone 18, Phase 2).
+
+    Returns None if no Issue matches public_id (the route maps that to
+    404). Raises InvalidTransitionError (from backend.transitions) if the
+    issue isn't currently IN_PROGRESS -- the route maps that to 400,
+    exactly like the generic status-transition endpoint. On a persistence
+    failure, the session is rolled back before the SQLAlchemyError is
+    re-raised (the route maps that to a sanitized 500).
+
+    `resolved_by` must be the server-side authenticated authority
+    identity (see backend/auth.py's get_current_authority) -- never
+    accepted from request input.
+    """
+    issue = get_issue_by_public_id(db, public_id)
+    if issue is None:
+        return None
+
+    try:
+        return repo_resolve_issue(db, issue, resolution_note, resolved_by)
     except SQLAlchemyError:
         db.rollback()
         raise
@@ -333,6 +362,7 @@ def get_admin_issue_detail(db: Session, public_id: str) -> AdminIssueDetailRespo
         status=issue.status,
         status_label=_status_label(issue.status),
         resolution_summary=issue.resolution_summary,
+        resolved_by=issue.resolved_by,
         created_at=issue.created_at,
         updated_at=issue.updated_at,
         resolved_at=issue.resolved_at,

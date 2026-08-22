@@ -76,6 +76,7 @@ def test_issues_table_exists_with_expected_columns(db_session):
         "assigned_department_id",
         "status",
         "resolution_summary",
+        "resolved_by",
         "created_at",
         "updated_at",
         "resolved_at",
