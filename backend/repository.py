@@ -8,6 +8,7 @@ routes), consistent with CivicSync's API -> Service -> Database layering.
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import case, func
@@ -50,13 +51,57 @@ _SEVERITY_PRIORITY_CASE = case(
 )
 
 
-def create_issue_from_civic_issue(db: Session, civic_issue: CivicIssue) -> Issue:
+def get_default_jurisdiction_id(db: Session) -> int:
+    """Resolve the configured default jurisdiction (Milestone 17) for
+    newly-created issues, from the CIVICSYNC_DEFAULT_JURISDICTION_CODE
+    environment variable.
+
+    This is a temporary MVP mechanism -- CivicSync has no per-citizen
+    geographic/location resolution yet, so every new issue is scoped to
+    one operator-configured jurisdiction. It deliberately does NOT use
+    Gemini's free-text `location` field (not authoritative geography) or
+    suggested_department (an AI recommendation, not a jurisdiction
+    signal) to determine this.
+
+    Fails loudly (raises EnvironmentError) rather than silently leaving
+    jurisdiction_id NULL if the environment variable is unset, or if it
+    doesn't match any real, active Jurisdiction -- a misconfigured
+    deployment must not silently create ungoverned data.
+    """
+    code = os.environ.get("CIVICSYNC_DEFAULT_JURISDICTION_CODE")
+    if not code:
+        raise EnvironmentError(
+            "CIVICSYNC_DEFAULT_JURISDICTION_CODE is not set. Every new issue "
+            "must be scoped to a jurisdiction -- add this to your .env file "
+            "(see .env.example)."
+        )
+    jurisdiction = db.query(Jurisdiction).filter(Jurisdiction.code == code).one_or_none()
+    if jurisdiction is None or not jurisdiction.is_active:
+        raise EnvironmentError(
+            f"CIVICSYNC_DEFAULT_JURISDICTION_CODE is set to {code!r}, but no "
+            "active jurisdiction with that code exists. Check the seeded "
+            "jurisdiction data and this environment variable."
+        )
+    return jurisdiction.id
+
+
+def create_issue_from_civic_issue(
+    db: Session, civic_issue: CivicIssue, jurisdiction_id: int
+) -> Issue:
     """Persist a new Issue from a freshly AI-analyzed CivicIssue.
+
+    jurisdiction_id is REQUIRED (Milestone 17) -- see
+    get_default_jurisdiction_id above for how a caller resolves it, and
+    Issue's docstring in backend/models.py for why jurisdiction and
+    assigned_department are independent, both-required-eventually, but
+    never-derived-from-each-other fields.
 
     Only fields CivicIssue actually produces are populated here. Official/
     operational fields (assigned_department_id, resolution_summary,
     resolved_at, closed_at) are left at their defaults -- AI output is
-    extraction, not an operational decision, so it never sets those.
+    extraction, not an operational decision, so it never sets those, and
+    this function does not auto-assign a department based on jurisdiction
+    either.
 
     Also writes the initial status history row (from_status=None,
     to_status=SUBMITTED) in the same transaction, so every Issue has a
@@ -73,6 +118,7 @@ def create_issue_from_civic_issue(db: Session, civic_issue: CivicIssue) -> Issue
         suggested_department=civic_issue.suggested_department,
         confidence=civic_issue.confidence,
         status=IssueStatus.SUBMITTED,
+        jurisdiction_id=jurisdiction_id,
     )
     db.add(issue)
     # Flush (not commit) so issue.id is assigned and available for the
@@ -273,31 +319,28 @@ def assign_department_to_issue(
 # happens in SQL -- never by loading the full issues table into Python.
 
 
-def get_jurisdiction_subtree_department_ids(
-    db: Session, jurisdiction_code: str
-) -> list[int] | None:
+def get_jurisdiction_subtree_ids(db: Session, jurisdiction_code: str) -> set[int] | None:
     """Resolve a jurisdiction code (at ANY level -- country, state,
-    district, or local body) to the ids of every Department whose
-    jurisdiction is that jurisdiction OR any descendant of it.
+    district, or local body) to the set of jurisdiction ids in its
+    subtree: itself plus every descendant.
 
     Returns None if jurisdiction_code doesn't match any jurisdiction (the
-    caller maps that to 404) -- an empty list is a valid, different
-    result (a real jurisdiction with zero departments yet).
+    caller maps that to 404).
 
-    This is the operational primitive behind jurisdiction-scoped
-    filtering (Milestone 14): filtering issues by "Nadia" (a DISTRICT)
-    must include every department under Krishnanagar Municipality (a
-    LOCAL_BODY beneath it), not just departments directly tagged with
-    Nadia's own id. Generic by construction -- works identically for any
-    jurisdiction code at any level, not hardcoded to Krishnanagar.
+    This is THE single reusable primitive behind every jurisdiction-scoped
+    query in this module (Milestones 14-17) -- filtering issues by
+    "Nadia" (a DISTRICT) must include every LOCAL_BODY beneath it, not
+    just rows directly tagged with Nadia's own id. Generic by
+    construction -- works identically for any jurisdiction code at any
+    level, not hardcoded to Krishnanagar. Every jurisdiction-scoped
+    repository function below calls this ONCE rather than re-implementing
+    the subtree walk.
 
-    Two queries total regardless of hierarchy size or depth: one to load
-    the (small, by design) jurisdictions table for the subtree walk, one
-    to fetch matching department ids -- the same N+1-safe shape as
-    get_jurisdiction_ancestry/get_jurisdictions_with_ancestry above.
+    One query total regardless of hierarchy size or depth: the
+    jurisdictions table is small by design (a handful of administrative
+    levels, not a GIS dataset), so it's loaded once and walked in Python.
     """
     all_jurisdictions = db.query(Jurisdiction).all()
-    by_id = {j.id: j for j in all_jurisdictions}
     root = next((j for j in all_jurisdictions if j.code == jurisdiction_code), None)
     if root is None:
         return None
@@ -315,6 +358,28 @@ def get_jurisdiction_subtree_department_ids(
             continue
         subtree_ids.add(current_id)
         stack.extend(children_by_parent.get(current_id, []))
+    return subtree_ids
+
+
+def get_jurisdiction_subtree_department_ids(
+    db: Session, jurisdiction_code: str
+) -> list[int] | None:
+    """Resolve a jurisdiction code to the ids of every Department whose
+    OWN jurisdiction (Department.jurisdiction_id, set once at department
+    creation -- see Milestone 13) is that jurisdiction or a descendant of
+    it. Used only where a query needs to filter/join through Department
+    itself (e.g. department workload); for filtering Issue rows directly,
+    use Issue.jurisdiction_id with get_jurisdiction_subtree_ids instead
+    (Milestone 17) -- these are independent scopes, see Issue's docstring
+    in backend/models.py.
+
+    Returns None if jurisdiction_code doesn't match any jurisdiction (the
+    caller maps that to 404) -- an empty list is a valid, different
+    result (a real jurisdiction with zero departments yet).
+    """
+    subtree_ids = get_jurisdiction_subtree_ids(db, jurisdiction_code)
+    if subtree_ids is None:
+        return None
 
     department_ids = [
         d.id
@@ -341,14 +406,14 @@ def get_active_issues_for_briefing(
     error) -- exactly the same safe compose-by-AND behavior already
     established for the M14 list/queue/stale endpoints.
     """
-    department_ids = get_jurisdiction_subtree_department_ids(db, jurisdiction_code)
-    if department_ids is None:
+    subtree_ids = get_jurisdiction_subtree_ids(db, jurisdiction_code)
+    if subtree_ids is None:
         return None
 
     query = (
         db.query(Issue)
         .options(joinedload(Issue.assigned_department))
-        .filter(Issue.assigned_department_id.in_(department_ids))
+        .filter(Issue.jurisdiction_id.in_(subtree_ids))
         .filter(Issue.status.in_(OPERATIONAL_STATUSES))
     )
     if department_code is not None:
@@ -396,10 +461,10 @@ def list_issues_for_admin(
     if category is not None:
         query = query.filter(Issue.category == category)
     if jurisdiction_code is not None:
-        department_ids = get_jurisdiction_subtree_department_ids(db, jurisdiction_code)
-        if department_ids is None:
+        subtree_ids = get_jurisdiction_subtree_ids(db, jurisdiction_code)
+        if subtree_ids is None:
             return None
-        query = query.filter(Issue.assigned_department_id.in_(department_ids))
+        query = query.filter(Issue.jurisdiction_id.in_(subtree_ids))
 
     # Count before pagination. Safe to count with joinedload() attached
     # here because assigned_department is many-to-one -- the eager-load
@@ -429,10 +494,10 @@ def count_issues_by_status(
     counts: dict[IssueStatus, int] = {s: 0 for s in IssueStatus}
     query = db.query(Issue.status, func.count(Issue.id))
     if jurisdiction_code is not None:
-        department_ids = get_jurisdiction_subtree_department_ids(db, jurisdiction_code)
-        if department_ids is None:
+        subtree_ids = get_jurisdiction_subtree_ids(db, jurisdiction_code)
+        if subtree_ids is None:
             return None
-        query = query.filter(Issue.assigned_department_id.in_(department_ids))
+        query = query.filter(Issue.jurisdiction_id.in_(subtree_ids))
     rows = query.group_by(Issue.status).all()
     for status_value, count in rows:
         counts[status_value] = count
@@ -449,10 +514,10 @@ def count_issues_by_severity(
     counts: dict[SeverityLevel, int] = {s: 0 for s in SeverityLevel}
     query = db.query(Issue.severity, func.count(Issue.id))
     if jurisdiction_code is not None:
-        department_ids = get_jurisdiction_subtree_department_ids(db, jurisdiction_code)
-        if department_ids is None:
+        subtree_ids = get_jurisdiction_subtree_ids(db, jurisdiction_code)
+        if subtree_ids is None:
             return None
-        query = query.filter(Issue.assigned_department_id.in_(department_ids))
+        query = query.filter(Issue.jurisdiction_id.in_(subtree_ids))
     rows = query.group_by(Issue.severity).all()
     for severity_value, count in rows:
         counts[severity_value] = count
@@ -534,10 +599,10 @@ def get_operational_queue(
     if severity is not None:
         query = query.filter(Issue.severity == severity)
     if jurisdiction_code is not None:
-        department_ids = get_jurisdiction_subtree_department_ids(db, jurisdiction_code)
-        if department_ids is None:
+        subtree_ids = get_jurisdiction_subtree_ids(db, jurisdiction_code)
+        if subtree_ids is None:
             return None
-        query = query.filter(Issue.assigned_department_id.in_(department_ids))
+        query = query.filter(Issue.jurisdiction_id.in_(subtree_ids))
 
     total = query.count()
     items = (
@@ -584,10 +649,10 @@ def get_stale_issues(
     if status is not None:
         query = query.filter(Issue.status == status)
     if jurisdiction_code is not None:
-        department_ids = get_jurisdiction_subtree_department_ids(db, jurisdiction_code)
-        if department_ids is None:
+        subtree_ids = get_jurisdiction_subtree_ids(db, jurisdiction_code)
+        if subtree_ids is None:
             return None
-        query = query.filter(Issue.assigned_department_id.in_(department_ids))
+        query = query.filter(Issue.jurisdiction_id.in_(subtree_ids))
 
     total = query.count()
     items = query.order_by(Issue.updated_at.asc()).limit(limit).offset(offset).all()
@@ -629,26 +694,36 @@ def _aging_bucket_expr():
     )
 
 
-def get_issue_aging_buckets(db: Session) -> dict[str, int]:
+def get_issue_aging_buckets(
+    db: Session, *, jurisdiction_code: str | None = None
+) -> dict[str, int] | None:
     """Age-since-created_at distribution for currently ACTIVE issues only
     (excludes CLOSED/REJECTED -- a closed issue is no longer aging
     backlog). One GROUP BY query; every bucket label is present,
     zero-filled if empty, in a fixed deterministic order.
+    jurisdiction_code scopes to that jurisdiction's subtree via
+    Issue.jurisdiction_id; returns None if the code doesn't match any
+    real jurisdiction (caller maps that to 404).
     """
     bucket = _aging_bucket_expr()
     counts: dict[str, int] = {label: 0 for label in _AGING_BUCKET_LABELS}
-    rows = (
-        db.query(bucket, func.count(Issue.id))
-        .filter(Issue.status.notin_(TERMINAL_STATUSES))
-        .group_by(bucket)
-        .all()
+    query = db.query(bucket, func.count(Issue.id)).filter(
+        Issue.status.notin_(TERMINAL_STATUSES)
     )
+    if jurisdiction_code is not None:
+        subtree_ids = get_jurisdiction_subtree_ids(db, jurisdiction_code)
+        if subtree_ids is None:
+            return None
+        query = query.filter(Issue.jurisdiction_id.in_(subtree_ids))
+    rows = query.group_by(bucket).all()
     for label, count in rows:
         counts[label] = count
     return counts
 
 
-def get_resolution_timing_metrics(db: Session) -> dict:
+def get_resolution_timing_metrics(
+    db: Session, *, jurisdiction_code: str | None = None
+) -> dict | None:
     """Resolution/closure timing metrics.
 
     Each average is computed ONLY over issues where the relevant
@@ -659,23 +734,32 @@ def get_resolution_timing_metrics(db: Session) -> dict:
     contribute to that average rather than skewing it toward zero. All
     three metrics are single SQL AVG(julianday(...) - julianday(...))
     aggregates -- no rows are pulled into Python for this calculation.
+    jurisdiction_code scopes both queries to that jurisdiction's subtree
+    via Issue.jurisdiction_id; returns None if the code doesn't match any
+    real jurisdiction (caller maps that to 404).
     """
-    resolved_count, avg_resolve_hours = (
-        db.query(
-            func.count(Issue.id),
-            func.avg(func.julianday(Issue.resolved_at) - func.julianday(Issue.created_at)) * 24,
-        )
-        .filter(Issue.resolved_at.isnot(None))
-        .one()
-    )
+    subtree_ids = None
+    if jurisdiction_code is not None:
+        subtree_ids = get_jurisdiction_subtree_ids(db, jurisdiction_code)
+        if subtree_ids is None:
+            return None
+
+    resolved_query = db.query(
+        func.count(Issue.id),
+        func.avg(func.julianday(Issue.resolved_at) - func.julianday(Issue.created_at)) * 24,
+    ).filter(Issue.resolved_at.isnot(None))
+    closed_query = db.query(
+        func.count(Issue.id),
+        func.avg(func.julianday(Issue.closed_at) - func.julianday(Issue.resolved_at)) * 24,
+        func.avg(func.julianday(Issue.closed_at) - func.julianday(Issue.created_at)) * 24,
+    ).filter(Issue.closed_at.isnot(None))
+    if subtree_ids is not None:
+        resolved_query = resolved_query.filter(Issue.jurisdiction_id.in_(subtree_ids))
+        closed_query = closed_query.filter(Issue.jurisdiction_id.in_(subtree_ids))
+
+    resolved_count, avg_resolve_hours = resolved_query.one()
     closed_count, avg_close_after_resolution_hours, avg_close_from_creation_hours = (
-        db.query(
-            func.count(Issue.id),
-            func.avg(func.julianday(Issue.closed_at) - func.julianday(Issue.resolved_at)) * 24,
-            func.avg(func.julianday(Issue.closed_at) - func.julianday(Issue.created_at)) * 24,
-        )
-        .filter(Issue.closed_at.isnot(None))
-        .one()
+        closed_query.one()
     )
     return {
         "resolved_issue_count": resolved_count,
@@ -686,22 +770,35 @@ def get_resolution_timing_metrics(db: Session) -> dict:
     }
 
 
-def get_department_workload(db: Session) -> list[tuple[Department, dict[IssueStatus, int]]]:
+def get_department_workload(
+    db: Session, *, jurisdiction_code: str | None = None
+) -> list[tuple[Department, dict[IssueStatus, int]]] | None:
     """Per-department status breakdown for EVERY active department, in a
     single query -- avoids the N+1 that would result from calling
     get_department_issue_counts() once per department to build the same
     picture. Every department gets every IssueStatus zero-filled, even
     departments with zero currently-assigned issues. Returned in
     Department.code order.
+
+    jurisdiction_code scopes to departments whose OWN jurisdiction
+    (Department.jurisdiction_id, set at department creation -- Milestone
+    13) falls within that jurisdiction's subtree -- department workload
+    is inherently a per-department view, so scoping is by which
+    departments belong to the jurisdiction, not by each issue's own
+    jurisdiction_id. Returns None if the code doesn't match any real
+    jurisdiction (caller maps that to 404).
     """
-    rows = (
+    query = (
         db.query(Department, Issue.status, func.count(Issue.id))
         .outerjoin(Issue, Issue.assigned_department_id == Department.id)
         .filter(Department.is_active.is_(True))
-        .group_by(Department.id, Issue.status)
-        .order_by(Department.code)
-        .all()
     )
+    if jurisdiction_code is not None:
+        subtree_ids = get_jurisdiction_subtree_ids(db, jurisdiction_code)
+        if subtree_ids is None:
+            return None
+        query = query.filter(Department.jurisdiction_id.in_(subtree_ids))
+    rows = query.group_by(Department.id, Issue.status).order_by(Department.code).all()
 
     by_department: dict[int, dict[IssueStatus, int]] = {}
     departments_by_id: dict[int, Department] = {}
@@ -720,17 +817,25 @@ def get_department_workload(db: Session) -> list[tuple[Department, dict[IssueSta
     return [(departments_by_id[dept_id], by_department[dept_id]) for dept_id in order]
 
 
-def get_recent_activity(db: Session, limit: int = 20) -> list[tuple[IssueStatusHistory, Issue]]:
-    """Most recent status-transition events system-wide, newest first.
+def get_recent_activity(
+    db: Session, limit: int = 20, *, jurisdiction_code: str | None = None
+) -> list[tuple[IssueStatusHistory, Issue]] | None:
+    """Most recent status-transition events, newest first.
 
     A single JOIN query -- Issue.public_id/category come from the join
     itself, not a per-row lookup, so this stays one query regardless of
-    `limit`.
+    `limit`. jurisdiction_code scopes to that jurisdiction's subtree via
+    Issue.jurisdiction_id; returns None if the code doesn't match any
+    real jurisdiction (caller maps that to 404).
     """
+    query = db.query(IssueStatusHistory, Issue).join(Issue, IssueStatusHistory.issue_id == Issue.id)
+    if jurisdiction_code is not None:
+        subtree_ids = get_jurisdiction_subtree_ids(db, jurisdiction_code)
+        if subtree_ids is None:
+            return None
+        query = query.filter(Issue.jurisdiction_id.in_(subtree_ids))
     return (
-        db.query(IssueStatusHistory, Issue)
-        .join(Issue, IssueStatusHistory.issue_id == Issue.id)
-        .order_by(IssueStatusHistory.changed_at.desc(), IssueStatusHistory.id.desc())
+        query.order_by(IssueStatusHistory.changed_at.desc(), IssueStatusHistory.id.desc())
         .limit(limit)
         .all()
     )
@@ -744,34 +849,50 @@ def get_recent_activity(db: Session, limit: int = 20) -> list[tuple[IssueStatusH
 # functions directly -- see backend/service.py's get_civic_insights().
 
 
-def count_active_high_severity_issues(db: Session) -> dict[SeverityLevel, int]:
+def count_active_high_severity_issues(
+    db: Session, *, jurisdiction_code: str | None = None
+) -> dict[SeverityLevel, int] | None:
     """Count of currently-active (non-terminal) issues at CRITICAL/HIGH
     severity, by severity. One GROUP BY query; both severities are
-    present, zero-filled if unused."""
+    present, zero-filled if unused. jurisdiction_code scopes to that
+    jurisdiction's subtree via Issue.jurisdiction_id; returns None if the
+    code doesn't match any real jurisdiction (caller maps that to 404).
+    """
     high_severities = (SeverityLevel.CRITICAL, SeverityLevel.HIGH)
     counts: dict[SeverityLevel, int] = {s: 0 for s in high_severities}
-    rows = (
-        db.query(Issue.severity, func.count(Issue.id))
-        .filter(Issue.severity.in_(high_severities), Issue.status.notin_(TERMINAL_STATUSES))
-        .group_by(Issue.severity)
-        .all()
+    query = db.query(Issue.severity, func.count(Issue.id)).filter(
+        Issue.severity.in_(high_severities), Issue.status.notin_(TERMINAL_STATUSES)
     )
+    if jurisdiction_code is not None:
+        subtree_ids = get_jurisdiction_subtree_ids(db, jurisdiction_code)
+        if subtree_ids is None:
+            return None
+        query = query.filter(Issue.jurisdiction_id.in_(subtree_ids))
+    rows = query.group_by(Issue.severity).all()
     for severity_value, count in rows:
         counts[severity_value] = count
     return counts
 
 
-def count_active_issues_by_category(db: Session) -> dict[IssueCategory, int]:
+def count_active_issues_by_category(
+    db: Session, *, jurisdiction_code: str | None = None
+) -> dict[IssueCategory, int] | None:
     """Count of currently-active (non-terminal) issues, by AI category.
     One GROUP BY query; every IssueCategory is present, zero-filled if
-    unused."""
+    unused. jurisdiction_code scopes to that jurisdiction's subtree via
+    Issue.jurisdiction_id; returns None if the code doesn't match any
+    real jurisdiction (caller maps that to 404).
+    """
     counts: dict[IssueCategory, int] = {c: 0 for c in IssueCategory}
-    rows = (
-        db.query(Issue.category, func.count(Issue.id))
-        .filter(Issue.status.notin_(TERMINAL_STATUSES))
-        .group_by(Issue.category)
-        .all()
+    query = db.query(Issue.category, func.count(Issue.id)).filter(
+        Issue.status.notin_(TERMINAL_STATUSES)
     )
+    if jurisdiction_code is not None:
+        subtree_ids = get_jurisdiction_subtree_ids(db, jurisdiction_code)
+        if subtree_ids is None:
+            return None
+        query = query.filter(Issue.jurisdiction_id.in_(subtree_ids))
+    rows = query.group_by(Issue.category).all()
     for category_value, count in rows:
         counts[category_value] = count
     return counts

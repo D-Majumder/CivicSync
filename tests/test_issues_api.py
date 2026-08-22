@@ -20,7 +20,7 @@ from ai.schemas import CivicIssue, IssueCategory, SeverityLevel
 from backend.database import Base, build_engine, get_db
 from backend.auth import get_current_authority
 from backend.main import app
-from backend.models import IssueStatus
+from backend.models import IssueStatus, Jurisdiction, JurisdictionLevel
 from backend.repository import get_issue_by_public_id
 
 
@@ -48,6 +48,16 @@ def client(tmp_path):
     engine = build_engine(f"sqlite:///{db_path}")
     Base.metadata.create_all(bind=engine)
     TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    seed_db = TestingSessionLocal()
+    seed_db.add(
+        Jurisdiction(
+            code="IN-WB-NADIA-KRISHNANAGAR", name="Krishnanagar Municipality",
+            level=JurisdictionLevel.LOCAL_BODY, country_code="IN",
+        )
+    )
+    seed_db.commit()
+    seed_db.close()
 
     def override_get_db():
         db = TestingSessionLocal()

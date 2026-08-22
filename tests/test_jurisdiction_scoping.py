@@ -108,6 +108,7 @@ def two_jurisdiction_client(tmp_path):
         category=IssueCategory.STREET_LIGHTING, problem="Streetlight not working.",
         severity=SeverityLevel.HIGH, confidence=0.9,
         status=IssueStatus.ROUTED, assigned_department_id=dept_a.id,
+        jurisdiction_id=krishnanagar.id,
         updated_at=stale_timestamp,
     )
     issue_b = Issue(
@@ -115,6 +116,7 @@ def two_jurisdiction_client(tmp_path):
         category=IssueCategory.ROADS_AND_POTHOLES, problem="Large pothole.",
         severity=SeverityLevel.CRITICAL, confidence=0.85,
         status=IssueStatus.ROUTED, assigned_department_id=dept_b.id,
+        jurisdiction_id=bbmp.id,
         updated_at=stale_timestamp,
     )
     db.add_all([issue_a, issue_b])

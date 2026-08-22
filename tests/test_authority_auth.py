@@ -19,7 +19,7 @@ from ai.schemas import CivicIssue, IssueCategory, SeverityLevel
 from backend.auth import SESSION_COOKIE_NAME, hash_password
 from backend.database import Base, build_engine, get_db
 from backend.main import app
-from backend.models import Department
+from backend.models import Department, Jurisdiction, JurisdictionLevel
 
 TEST_USERNAME = "test_authority"
 TEST_PASSWORD = "correct-horse-battery-staple"
@@ -59,6 +59,12 @@ def client(auth_env, tmp_path):
     TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
     seed_db = TestingSessionLocal()
+    jurisdiction = Jurisdiction(
+        code="IN-WB-NADIA-KRISHNANAGAR", name="Krishnanagar Municipality",
+        level=JurisdictionLevel.LOCAL_BODY, country_code="IN",
+    )
+    seed_db.add(jurisdiction)
+    seed_db.commit()
     seed_db.add(Department(code="STREET_LIGHTING", name="Street Lighting", is_active=True))
     seed_db.commit()
     seed_db.close()

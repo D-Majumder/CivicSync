@@ -15,7 +15,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
 
 from ai.schemas import CivicIssue, IssueCategory, SeverityLevel
-from backend.models import Department, Issue, IssueStatus
+from backend.models import Department, Issue, IssueStatus, Jurisdiction, JurisdictionLevel
 from backend.repository import create_issue_from_civic_issue, get_issue_by_public_id
 
 
@@ -33,6 +33,19 @@ def _sample_civic_issue(**overrides) -> CivicIssue:
     )
     base.update(overrides)
     return CivicIssue(**base)
+
+
+def _seed_jurisdiction_id(db_session) -> int:
+    """Milestone 17: Issue.jurisdiction_id is required. Seeds one
+    jurisdiction and returns its id -- call ONCE per test (the code is
+    unique), then reuse the returned id for every Issue in that test."""
+    jurisdiction = Jurisdiction(
+        code="IN-WB-NADIA-KRISHNANAGAR", name="Krishnanagar Municipality",
+        level=JurisdictionLevel.LOCAL_BODY, country_code="IN",
+    )
+    db_session.add(jurisdiction)
+    db_session.commit()
+    return jurisdiction.id
 
 
 # --- 1. Database session can connect ---------------------------------------
@@ -59,6 +72,7 @@ def test_issues_table_exists_with_expected_columns(db_session):
         "affected_population",
         "suggested_department",
         "confidence",
+        "jurisdiction_id",
         "assigned_department_id",
         "status",
         "resolution_summary",
@@ -73,9 +87,10 @@ def test_issues_table_exists_with_expected_columns(db_session):
 
 
 def test_create_and_retrieve_issue(db_session):
+    jid = _seed_jurisdiction_id(db_session)
     civic_issue = _sample_civic_issue()
 
-    created = create_issue_from_civic_issue(db_session, civic_issue)
+    created = create_issue_from_civic_issue(db_session, civic_issue, jid)
     assert created.id is not None
 
     fetched = get_issue_by_public_id(db_session, created.public_id)
@@ -85,6 +100,7 @@ def test_create_and_retrieve_issue(db_session):
     assert fetched.category == IssueCategory.STREET_LIGHTING
     assert fetched.problem == civic_issue.problem
     assert fetched.confidence == pytest.approx(0.82)
+    assert fetched.jurisdiction_id == jid
 
 
 def test_get_issue_by_public_id_returns_none_when_missing(db_session):
@@ -95,7 +111,8 @@ def test_get_issue_by_public_id_returns_none_when_missing(db_session):
 
 
 def test_public_id_is_unique(db_session):
-    issue_a = create_issue_from_civic_issue(db_session, _sample_civic_issue())
+    jid = _seed_jurisdiction_id(db_session)
+    issue_a = create_issue_from_civic_issue(db_session, _sample_civic_issue(), jid)
 
     # Force a collision by reusing the same public_id on a second row.
     duplicate = Issue(
@@ -105,6 +122,7 @@ def test_public_id_is_unique(db_session):
         problem="Different problem.",
         severity=SeverityLevel.UNKNOWN,
         confidence=0.4,
+        jurisdiction_id=jid,
     )
     db_session.add(duplicate)
     with pytest.raises(IntegrityError):
@@ -112,9 +130,10 @@ def test_public_id_is_unique(db_session):
 
 
 def test_public_ids_are_distinct_across_created_issues(db_session):
-    first = create_issue_from_civic_issue(db_session, _sample_civic_issue())
+    jid = _seed_jurisdiction_id(db_session)
+    first = create_issue_from_civic_issue(db_session, _sample_civic_issue(), jid)
     second = create_issue_from_civic_issue(
-        db_session, _sample_civic_issue(original_text="A different complaint entirely.")
+        db_session, _sample_civic_issue(original_text="A different complaint entirely."), jid
     )
     assert first.public_id != second.public_id
 
@@ -123,17 +142,20 @@ def test_public_ids_are_distinct_across_created_issues(db_session):
 
 
 def test_status_defaults_to_submitted(db_session):
-    issue = create_issue_from_civic_issue(db_session, _sample_civic_issue())
+    jid = _seed_jurisdiction_id(db_session)
+    issue = create_issue_from_civic_issue(db_session, _sample_civic_issue(), jid)
     assert issue.status == IssueStatus.SUBMITTED
 
 
 def test_invalid_status_value_is_rejected_by_the_database(db_session):
+    jid = _seed_jurisdiction_id(db_session)
     issue = Issue(
         original_text="Complaint text.",
         category=IssueCategory.OTHER,
         problem="Some problem.",
         severity=SeverityLevel.UNKNOWN,
         confidence=0.5,
+        jurisdiction_id=jid,
     )
     db_session.add(issue)
     db_session.commit()
@@ -153,8 +175,9 @@ def test_invalid_status_value_is_rejected_by_the_database(db_session):
 
 
 def test_created_at_and_updated_at_are_populated_on_creation(db_session):
+    jid = _seed_jurisdiction_id(db_session)
     before = datetime.now(timezone.utc)
-    issue = create_issue_from_civic_issue(db_session, _sample_civic_issue())
+    issue = create_issue_from_civic_issue(db_session, _sample_civic_issue(), jid)
     after = datetime.now(timezone.utc)
 
     assert issue.created_at is not None
@@ -164,7 +187,8 @@ def test_created_at_and_updated_at_are_populated_on_creation(db_session):
 
 
 def test_updated_at_changes_on_update(db_session):
-    issue = create_issue_from_civic_issue(db_session, _sample_civic_issue())
+    jid = _seed_jurisdiction_id(db_session)
+    issue = create_issue_from_civic_issue(db_session, _sample_civic_issue(), jid)
     original_updated_at = issue.updated_at
 
     issue.resolution_summary = "Repair crew dispatched."
@@ -178,7 +202,8 @@ def test_updated_at_changes_on_update(db_session):
 
 
 def test_resolved_at_and_closed_at_are_null_on_creation(db_session):
-    issue = create_issue_from_civic_issue(db_session, _sample_civic_issue())
+    jid = _seed_jurisdiction_id(db_session)
+    issue = create_issue_from_civic_issue(db_session, _sample_civic_issue(), jid)
     assert issue.resolved_at is None
     assert issue.closed_at is None
     assert issue.status != IssueStatus.RESOLVED
@@ -188,9 +213,8 @@ def test_resolved_at_and_closed_at_are_null_on_creation(db_session):
 def test_resolved_at_is_only_set_by_an_explicit_operational_action(db_session):
     """AI output alone must never move an issue to RESOLVED/CLOSED or set
     resolved_at/closed_at -- that's an explicit operational action."""
-    issue = create_issue_from_civic_issue(
-        db_session, _sample_civic_issue(confidence=0.99)
-    )
+    jid = _seed_jurisdiction_id(db_session)
+    issue = create_issue_from_civic_issue(db_session, _sample_civic_issue(confidence=0.99), jid)
     assert issue.resolved_at is None
     assert issue.status == IssueStatus.SUBMITTED
 
@@ -212,8 +236,9 @@ def test_suggested_and_assigned_department_are_independent(db_session):
     """suggested_department (AI free text) and assigned_department (an
     official Department entity, added in Milestone 6) are independent:
     assigning a department never alters the AI's original suggestion."""
+    jid = _seed_jurisdiction_id(db_session)
     civic_issue = _sample_civic_issue(suggested_department="Municipal Electrical Department")
-    issue = create_issue_from_civic_issue(db_session, civic_issue)
+    issue = create_issue_from_civic_issue(db_session, civic_issue, jid)
 
     assert issue.suggested_department == "Municipal Electrical Department"
     assert issue.assigned_department is None
@@ -233,5 +258,34 @@ def test_suggested_and_assigned_department_are_independent(db_session):
 
 def test_ai_confidence_does_not_affect_official_status(db_session):
     """High AI confidence must not itself change operational status."""
-    issue = create_issue_from_civic_issue(db_session, _sample_civic_issue(confidence=1.0))
+    jid = _seed_jurisdiction_id(db_session)
+    issue = create_issue_from_civic_issue(db_session, _sample_civic_issue(confidence=1.0), jid)
     assert issue.status == IssueStatus.SUBMITTED
+
+
+# --- 9. jurisdiction_id is required and independent of assigned_department -
+
+
+def test_jurisdiction_id_is_required(db_session):
+    """Milestone 17: jurisdiction_id has no default -- omitting it must
+    fail at the database level (NOT NULL), not silently succeed."""
+    issue = Issue(
+        original_text="Complaint text.",
+        category=IssueCategory.OTHER,
+        problem="Some problem.",
+        severity=SeverityLevel.UNKNOWN,
+        confidence=0.5,
+    )
+    db_session.add(issue)
+    with pytest.raises(IntegrityError):
+        db_session.commit()
+
+
+def test_jurisdiction_is_independent_of_assigned_department(db_session):
+    """An issue can be jurisdiction-scoped while completely unassigned --
+    this is the exact scenario the Milestone 17 bug fix addresses."""
+    jid = _seed_jurisdiction_id(db_session)
+    issue = create_issue_from_civic_issue(db_session, _sample_civic_issue(), jid)
+    assert issue.jurisdiction_id == jid
+    assert issue.assigned_department_id is None
+    assert issue.assigned_department is None

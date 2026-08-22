@@ -113,12 +113,48 @@ class Issue(Base):
     suggested_department: Mapped[str | None] = mapped_column(String(255), nullable=True)
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
 
+    # --- Jurisdiction scope vs. operational responsibility (Milestone 17) --
+    #
+    # These two fields answer two INDEPENDENT questions and must never be
+    # derived from one another:
+    #
+    #   jurisdiction_id        "Where does this issue belong?"
+    #                          The administrative/geographic scope (see
+    #                          Jurisdiction above). Set once, at creation,
+    #                          from the configured default jurisdiction
+    #                          (see backend.repository.get_default_jurisdiction_id)
+    #                          -- never derived from assigned_department,
+    #                          and never from Gemini's free-text `location`
+    #                          field, which is not authoritative geography.
+    #
+    #   assigned_department_id "Which department is officially responsible?"
+    #                          Set later by an authority action (see
+    #                          assign_department_to_issue), independent of
+    #                          jurisdiction. NULL until an authority
+    #                          assigns it -- this is normal, expected state
+    #                          for SUBMITTED/CLASSIFIED issues, not a bug.
+    #
+    # An issue is therefore jurisdiction-scoped from the moment it's
+    # created, while remaining unassigned (assigned_department_id IS NULL)
+    # until an authority routes it -- both states are valid simultaneously.
+    # Prior to this milestone, jurisdiction was derived transitively via
+    # Issue -> assigned_department -> Department -> Jurisdiction, which
+    # caused every SUBMITTED/CLASSIFIED issue (assigned_department_id IS
+    # NULL by design) to silently disappear from jurisdiction-scoped
+    # authority views. jurisdiction_id fixes this by making jurisdiction
+    # scope a direct, always-present property of the Issue itself.
+    jurisdiction_id: Mapped[int] = mapped_column(
+        ForeignKey("jurisdictions.id"), nullable=False, index=True
+    )
+    jurisdiction: Mapped["Jurisdiction"] = relationship()
+
     # --- Official / operational data (never set from AI output) ----------
     # The department officially assigned by staff -- a real Department
     # entity from the controlled registry (see Department below), NOT
     # free text. Independent of, and never derived from,
     # suggested_department above. Nullable: an issue may have no official
-    # assignment yet.
+    # assignment yet -- see the jurisdiction_id block above for why this
+    # is expected, valid state rather than something to work around.
     assigned_department_id: Mapped[int | None] = mapped_column(
         ForeignKey("departments.id"), nullable=True
     )

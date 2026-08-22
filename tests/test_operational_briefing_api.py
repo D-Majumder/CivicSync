@@ -111,18 +111,21 @@ def briefing_client(tmp_path):
         category=IssueCategory.STREET_LIGHTING, problem="Streetlight not working.",
         severity=SeverityLevel.HIGH, confidence=0.9,
         status=IssueStatus.ROUTED, assigned_department_id=dept_lighting.id,
+        jurisdiction_id=krishnanagar.id,
     )
     issue_2 = Issue(
         public_id="CIV-TESTLIGHT02", original_text="Another streetlight out.",
         category=IssueCategory.STREET_LIGHTING, problem="Streetlight not working.",
         severity=SeverityLevel.MEDIUM, confidence=0.8,
         status=IssueStatus.ACKNOWLEDGED, assigned_department_id=dept_lighting.id,
+        jurisdiction_id=krishnanagar.id,
     )
     issue_3 = Issue(
         public_id="CIV-TESTWATER01", original_text="Water main leaking.",
         category=IssueCategory.WATER_SUPPLY, problem="Water main leak.",
         severity=SeverityLevel.CRITICAL, confidence=0.95,
         status=IssueStatus.IN_PROGRESS, assigned_department_id=dept_water.id,
+        jurisdiction_id=krishnanagar.id,
     )
     # A CLOSED issue in the same scope -- must be excluded (active-only).
     issue_closed = Issue(
@@ -130,12 +133,14 @@ def briefing_client(tmp_path):
         category=IssueCategory.STREET_LIGHTING, problem="Old issue.",
         severity=SeverityLevel.LOW, confidence=0.7,
         status=IssueStatus.CLOSED, assigned_department_id=dept_lighting.id,
+        jurisdiction_id=krishnanagar.id,
     )
     issue_bengaluru = Issue(
         public_id="CIV-TESTBLR01", original_text="Pothole in Bengaluru.",
         category=IssueCategory.ROADS_AND_POTHOLES, problem="Large pothole.",
         severity=SeverityLevel.CRITICAL, confidence=0.85,
         status=IssueStatus.ROUTED, assigned_department_id=dept_roads.id,
+        jurisdiction_id=bbmp.id,
     )
     db.add_all([issue_1, issue_2, issue_3, issue_closed, issue_bengaluru])
     db.commit()

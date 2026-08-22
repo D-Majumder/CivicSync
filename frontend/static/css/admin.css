@@ -550,3 +550,22 @@
     grid-template-columns: 90px 1fr 36px;
   }
 }
+
+/* --- Authority logout button (Milestone 17) ------------------------------------
+   .btn-secondary (transparent background, on-surface text) is designed for
+   LIGHT surfaces -- on the dark Civic Blue sidebar it was effectively
+   invisible until hovered. This gives #logout-button its own high-contrast
+   treatment (white pill, Civic Blue text) so it's clearly visible at rest,
+   without introducing a red "danger" style CivicSync doesn't otherwise use. */
+#logout-button {
+  background: #ffffff;
+  color: var(--color-primary);
+  border-color: #ffffff;
+  font-weight: 700;
+}
+
+#logout-button:hover:not(:disabled) {
+  background: #e8eef8;
+  border-color: #e8eef8;
+  color: var(--color-primary);
+}

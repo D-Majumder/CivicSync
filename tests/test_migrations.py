@@ -20,7 +20,7 @@ from sqlalchemy.orm import sessionmaker
 
 from ai.schemas import IssueCategory, SeverityLevel
 from backend.database import Base
-from backend.models import Issue, IssueStatus
+from backend.models import Issue, IssueStatus, Jurisdiction, JurisdictionLevel
 from backend.repository import (
     create_issue_from_civic_issue,
     get_status_history,
@@ -51,14 +51,26 @@ def db_session_and_engine(tmp_path):
     Base.metadata.create_all(bind=engine)
     TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
     session = TestingSessionLocal()
+    session.add(
+        Jurisdiction(
+            code="IN-WB-NADIA-KRISHNANAGAR", name="Krishnanagar Municipality",
+            level=JurisdictionLevel.LOCAL_BODY, country_code="IN",
+        )
+    )
+    session.commit()
+    jurisdiction_id = session.query(Jurisdiction).filter(
+        Jurisdiction.code == "IN-WB-NADIA-KRISHNANAGAR"
+    ).one().id
     try:
-        yield session, engine
+        yield session, engine, jurisdiction_id
     finally:
         session.close()
         engine.dispose()
 
 
-def _make_issue_missing_initial_history(db_session, created_at: datetime) -> Issue:
+def _make_issue_missing_initial_history(
+    db_session, created_at: datetime, jurisdiction_id: int
+) -> Issue:
     """Simulate a pre-existing Issue created by an older code path that
     never wrote the initial history row -- i.e. the exact bug reported."""
     issue = Issue(
@@ -69,6 +81,7 @@ def _make_issue_missing_initial_history(db_session, created_at: datetime) -> Iss
         confidence=0.8,
         status=IssueStatus.SUBMITTED,
         created_at=created_at,
+        jurisdiction_id=jurisdiction_id,
     )
     db_session.add(issue)
     db_session.commit()
@@ -80,9 +93,9 @@ def test_migration_backfills_missing_initial_row(migration_module, db_session_an
     """Reproduces the reported scenario exactly: an issue with 6 recorded
     transitions (SUBMITTED->CLASSIFIED ... RESOLVED->CLOSED) but no initial
     null->SUBMITTED row, then confirms the migration adds exactly that row."""
-    db_session, engine = db_session_and_engine
+    db_session, engine, jurisdiction_id = db_session_and_engine
     old_created_at = datetime.now(timezone.utc) - timedelta(days=30)
-    issue = _make_issue_missing_initial_history(db_session, old_created_at)
+    issue = _make_issue_missing_initial_history(db_session, old_created_at, jurisdiction_id)
 
     for target in (
         IssueStatus.CLASSIFIED,
@@ -117,8 +130,8 @@ def test_migration_backfills_missing_initial_row(migration_module, db_session_an
 
 
 def test_migration_is_idempotent(migration_module, db_session_and_engine):
-    db_session, engine = db_session_and_engine
-    issue = _make_issue_missing_initial_history(db_session, datetime.now(timezone.utc))
+    db_session, engine, jurisdiction_id = db_session_and_engine
+    issue = _make_issue_missing_initial_history(db_session, datetime.now(timezone.utc), jurisdiction_id)
 
     with engine.connect() as conn:
         first_run = migration_module.backfill_missing_initial_history(conn)
@@ -140,7 +153,7 @@ def test_migration_does_not_touch_issues_that_already_have_initial_row(
 ):
     """Issues created through the current (correct) code path already have
     their initial row -- the migration must not add a duplicate."""
-    db_session, engine = db_session_and_engine
+    db_session, engine, jurisdiction_id = db_session_and_engine
     civic_issue = CivicIssue(
         original_text="Garbage has not been collected in ten days.",
         category=IssueCategory.SANITATION_AND_WASTE,
@@ -148,7 +161,7 @@ def test_migration_does_not_touch_issues_that_already_have_initial_row(
         severity=SeverityLevel.LOW,
         confidence=0.7,
     )
-    issue = create_issue_from_civic_issue(db_session, civic_issue)
+    issue = create_issue_from_civic_issue(db_session, civic_issue, jurisdiction_id)
 
     with engine.connect() as conn:
         inserted = migration_module.backfill_missing_initial_history(conn)
@@ -165,8 +178,8 @@ def test_migration_does_not_touch_issues_that_already_have_initial_row(
 def test_migration_handles_multiple_issues_independently(
     migration_module, db_session_and_engine
 ):
-    db_session, engine = db_session_and_engine
-    broken_issue = _make_issue_missing_initial_history(db_session, datetime.now(timezone.utc))
+    db_session, engine, jurisdiction_id = db_session_and_engine
+    broken_issue = _make_issue_missing_initial_history(db_session, datetime.now(timezone.utc), jurisdiction_id)
     civic_issue = CivicIssue(
         original_text="Pothole on Main Street.",
         category=IssueCategory.ROADS_AND_POTHOLES,
@@ -174,7 +187,7 @@ def test_migration_handles_multiple_issues_independently(
         severity=SeverityLevel.HIGH,
         confidence=0.9,
     )
-    healthy_issue = create_issue_from_civic_issue(db_session, civic_issue)
+    healthy_issue = create_issue_from_civic_issue(db_session, civic_issue, jurisdiction_id)
 
     with engine.connect() as conn:
         inserted = migration_module.backfill_missing_initial_history(conn)

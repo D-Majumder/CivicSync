@@ -733,8 +733,17 @@ def read_operational_queue(
         "Gemini."
     ),
 )
-def read_status_funnel(db: Session = Depends(get_db), authority: str = Depends(get_current_authority)) -> FunnelResponse:
-    return get_status_funnel(db)
+def read_status_funnel(
+    jurisdiction_code: str | None = Query(default=None, description="Scope to this jurisdiction and its descendants."),
+    db: Session = Depends(get_db),
+    authority: str = Depends(get_current_authority),
+) -> FunnelResponse:
+    result = get_status_funnel(db, jurisdiction_code=jurisdiction_code)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Jurisdiction not found."
+        )
+    return result
 
 
 @app.get(
@@ -748,8 +757,17 @@ def read_status_funnel(db: Session = Depends(get_db), authority: str = Depends(g
         "enum only (no second severity vocabulary). Never calls Gemini."
     ),
 )
-def read_severity_distribution(db: Session = Depends(get_db), authority: str = Depends(get_current_authority)) -> SeverityDistributionResponse:
-    return get_severity_distribution(db)
+def read_severity_distribution(
+    jurisdiction_code: str | None = Query(default=None, description="Scope to this jurisdiction and its descendants."),
+    db: Session = Depends(get_db),
+    authority: str = Depends(get_current_authority),
+) -> SeverityDistributionResponse:
+    result = get_severity_distribution(db, jurisdiction_code=jurisdiction_code)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Jurisdiction not found."
+        )
+    return result
 
 
 @app.get(
@@ -765,8 +783,17 @@ def read_severity_distribution(db: Session = Depends(get_db), authority: str = D
         "no N+1. Never calls Gemini."
     ),
 )
-def read_department_workload(db: Session = Depends(get_db), authority: str = Depends(get_current_authority)) -> DepartmentWorkloadResponse:
-    return get_department_workload_summary(db)
+def read_department_workload(
+    jurisdiction_code: str | None = Query(default=None, description="Scope to this jurisdiction and its descendants."),
+    db: Session = Depends(get_db),
+    authority: str = Depends(get_current_authority),
+) -> DepartmentWorkloadResponse:
+    result = get_department_workload_summary(db, jurisdiction_code=jurisdiction_code)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Jurisdiction not found."
+        )
+    return result
 
 
 @app.get(
@@ -782,8 +809,17 @@ def read_department_workload(db: Session = Depends(get_db), authority: str = Dep
         "'overdue'. Never calls Gemini."
     ),
 )
-def read_aging_buckets(db: Session = Depends(get_db), authority: str = Depends(get_current_authority)) -> AgingBucketsResponse:
-    return get_aging_buckets(db)
+def read_aging_buckets(
+    jurisdiction_code: str | None = Query(default=None, description="Scope to this jurisdiction and its descendants."),
+    db: Session = Depends(get_db),
+    authority: str = Depends(get_current_authority),
+) -> AgingBucketsResponse:
+    result = get_aging_buckets(db, jurisdiction_code=jurisdiction_code)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Jurisdiction not found."
+        )
+    return result
 
 
 @app.get(
@@ -799,8 +835,17 @@ def read_aging_buckets(db: Session = Depends(get_db), authority: str = Depends(g
         "Gemini."
     ),
 )
-def read_resolution_timing(db: Session = Depends(get_db), authority: str = Depends(get_current_authority)) -> ResolutionTimingResponse:
-    return get_resolution_timing(db)
+def read_resolution_timing(
+    jurisdiction_code: str | None = Query(default=None, description="Scope to this jurisdiction and its descendants."),
+    db: Session = Depends(get_db),
+    authority: str = Depends(get_current_authority),
+) -> ResolutionTimingResponse:
+    result = get_resolution_timing(db, jurisdiction_code=jurisdiction_code)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Jurisdiction not found."
+        )
+    return result
 
 
 @app.get(
@@ -816,9 +861,15 @@ def read_resolution_timing(db: Session = Depends(get_db), authority: str = Depen
 )
 def read_recent_activity(
     limit: int = Query(default=20, ge=1, le=100),
+    jurisdiction_code: str | None = Query(default=None, description="Scope to this jurisdiction and its descendants."),
     db: Session = Depends(get_db), authority: str = Depends(get_current_authority),
 ) -> RecentActivityResponse:
-    return get_recent_activity_feed(db, limit=limit)
+    result = get_recent_activity_feed(db, limit=limit, jurisdiction_code=jurisdiction_code)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Jurisdiction not found."
+        )
+    return result
 
 
 # ============================================================================
@@ -855,8 +906,17 @@ def read_recent_activity(
         "Gemini."
     ),
 )
-def read_civic_insights(db: Session = Depends(get_db), authority: str = Depends(get_current_authority)) -> InsightsResponse:
-    return get_civic_insights(db)
+def read_civic_insights(
+    jurisdiction_code: str | None = Query(default=None, description="Scope to this jurisdiction and its descendants."),
+    db: Session = Depends(get_db),
+    authority: str = Depends(get_current_authority),
+) -> InsightsResponse:
+    result = get_civic_insights(db, jurisdiction_code=jurisdiction_code)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Jurisdiction not found."
+        )
+    return result
 
 
 @app.post(
@@ -878,8 +938,17 @@ def read_civic_insights(db: Session = Depends(get_db), authority: str = Depends(
         "than failing the whole request."
     ),
 )
-def prioritize_civic_insights(db: Session = Depends(get_db), authority: str = Depends(get_current_authority)) -> PrioritizedInsightsResponse:
-    return get_prioritized_insights(db)
+def prioritize_civic_insights(
+    jurisdiction_code: str | None = Query(default=None, description="Scope to this jurisdiction and its descendants."),
+    db: Session = Depends(get_db),
+    authority: str = Depends(get_current_authority),
+) -> PrioritizedInsightsResponse:
+    result = get_prioritized_insights(db, jurisdiction_code=jurisdiction_code)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Jurisdiction not found."
+        )
+    return result
 
 
 # ============================================================================

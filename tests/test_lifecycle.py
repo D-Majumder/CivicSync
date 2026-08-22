@@ -11,7 +11,7 @@ import pytest
 from sqlalchemy.exc import SQLAlchemyError
 
 from ai.schemas import CivicIssue, IssueCategory, SeverityLevel
-from backend.models import Issue, IssueStatus
+from backend.models import Issue, IssueStatus, Jurisdiction, JurisdictionLevel
 from backend.repository import (
     create_issue_from_civic_issue,
     get_issue_by_public_id,
@@ -34,8 +34,29 @@ def _sample_civic_issue(**overrides) -> CivicIssue:
     return CivicIssue(**base)
 
 
+def _get_or_create_jurisdiction_id(db_session) -> int:
+    """Milestone 17: Issue.jurisdiction_id is required. Reuses an
+    existing seeded jurisdiction if this db_session already has one
+    (idempotent across multiple _create_issue calls in the same test)."""
+    existing = (
+        db_session.query(Jurisdiction)
+        .filter(Jurisdiction.code == "IN-WB-NADIA-KRISHNANAGAR")
+        .one_or_none()
+    )
+    if existing is not None:
+        return existing.id
+    jurisdiction = Jurisdiction(
+        code="IN-WB-NADIA-KRISHNANAGAR", name="Krishnanagar Municipality",
+        level=JurisdictionLevel.LOCAL_BODY, country_code="IN",
+    )
+    db_session.add(jurisdiction)
+    db_session.commit()
+    return jurisdiction.id
+
+
 def _create_issue(db_session) -> Issue:
-    return create_issue_from_civic_issue(db_session, _sample_civic_issue())
+    jurisdiction_id = _get_or_create_jurisdiction_id(db_session)
+    return create_issue_from_civic_issue(db_session, _sample_civic_issue(), jurisdiction_id)
 
 
 def _advance(db_session, issue: Issue, *targets: IssueStatus) -> Issue:

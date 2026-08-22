@@ -217,11 +217,11 @@
     showGlobalError(null);
     const [summaryR, funnelR, severityR, workloadR, agingR, activityR] = await Promise.allSettled([
       CivicSyncApi.getDashboardSummary({ jurisdiction_code: state.currentJurisdictionCode || null }),
-      CivicSyncApi.getFunnel(),
-      CivicSyncApi.getSeverityDistribution(),
-      CivicSyncApi.getDepartmentWorkload(),
-      CivicSyncApi.getAgingBuckets(),
-      CivicSyncApi.getRecentActivity(10),
+      CivicSyncApi.getFunnel(state.currentJurisdictionCode),
+      CivicSyncApi.getSeverityDistribution(state.currentJurisdictionCode),
+      CivicSyncApi.getDepartmentWorkload(state.currentJurisdictionCode),
+      CivicSyncApi.getAgingBuckets(state.currentJurisdictionCode),
+      CivicSyncApi.getRecentActivity(10, state.currentJurisdictionCode),
     ]);
 
     if (summaryR.status === 'fulfilled') {
@@ -438,7 +438,7 @@
     const grid = document.getElementById('department-grid');
     document.getElementById('department-detail-card').hidden = true;
     try {
-      const workload = await CivicSyncApi.getDepartmentWorkload();
+      const workload = await CivicSyncApi.getDepartmentWorkload(state.currentJurisdictionCode);
       if (!workload.departments.length) {
         grid.innerHTML = '<p class="text-muted">No active departments configured.</p>';
         return;
@@ -526,7 +526,7 @@
       ''
     );
     try {
-      const response = await CivicSyncApi.getInsights();
+      const response = await CivicSyncApi.getInsights(state.currentJurisdictionCode);
       renderInsights(response.insights);
     } catch (err) {
       showGlobalError('Could not load civic insights: ' + err.message);
@@ -538,7 +538,7 @@
     btn.disabled = true;
     btn.textContent = 'Asking Gemini\u2026';
     try {
-      const response = await CivicSyncApi.prioritizeInsights();
+      const response = await CivicSyncApi.prioritizeInsights(state.currentJurisdictionCode);
       renderInsights(response.insights); // grounded insights, unchanged by the AI step
       const panel = document.getElementById('ai-advisory-panel');
       const errorEl = document.getElementById('ai-advisory-error');

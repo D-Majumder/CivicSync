@@ -218,40 +218,59 @@ const CivicSyncApi = {
   },
 
   /** Ordered status funnel (same counts as dashboard summary, list-shaped). */
-  getFunnel() {
-    return request('/api/admin/analytics/funnel', { method: 'GET' });
+  getFunnel(jurisdictionCode) {
+    return request(
+      `/api/admin/analytics/funnel${toQueryString({ jurisdiction_code: jurisdictionCode || null })}`,
+      { method: 'GET' }
+    );
   },
 
   /** Severity breakdown with percentages. */
-  getSeverityDistribution() {
-    return request('/api/admin/analytics/severity-distribution', { method: 'GET' });
+  getSeverityDistribution(jurisdictionCode) {
+    return request(
+      `/api/admin/analytics/severity-distribution${toQueryString({ jurisdiction_code: jurisdictionCode || null })}`,
+      { method: 'GET' }
+    );
   },
 
   /** Status breakdown for every active department, one call. */
-  getDepartmentWorkload() {
-    return request('/api/admin/analytics/department-workload', { method: 'GET' });
+  getDepartmentWorkload(jurisdictionCode) {
+    return request(
+      `/api/admin/analytics/department-workload${toQueryString({ jurisdiction_code: jurisdictionCode || null })}`,
+      { method: 'GET' }
+    );
   },
 
   /** Age-since-created_at distribution for active issues (neutral buckets, not SLA). */
-  getAgingBuckets() {
-    return request('/api/admin/analytics/aging', { method: 'GET' });
+  getAgingBuckets(jurisdictionCode) {
+    return request(
+      `/api/admin/analytics/aging${toQueryString({ jurisdiction_code: jurisdictionCode || null })}`,
+      { method: 'GET' }
+    );
   },
 
-  /** Most recent status-transition events, system-wide. */
-  getRecentActivity(limit) {
-    return request(`/api/admin/analytics/recent-activity${toQueryString({ limit })}`, {
-      method: 'GET',
-    });
+  /** Most recent status-transition events. */
+  getRecentActivity(limit, jurisdictionCode) {
+    return request(
+      `/api/admin/analytics/recent-activity${toQueryString({ limit, jurisdiction_code: jurisdictionCode || null })}`,
+      { method: 'GET' }
+    );
   },
 
   /** Grounded, deterministic civic insights. Never calls Gemini. */
-  getInsights() {
-    return request('/api/admin/insights', { method: 'GET' });
+  getInsights(jurisdictionCode) {
+    return request(
+      `/api/admin/insights${toQueryString({ jurisdiction_code: jurisdictionCode || null })}`,
+      { method: 'GET' }
+    );
   },
 
   /** AI-assisted prioritization over the same grounded insights (advisory only). */
-  prioritizeInsights() {
-    return request('/api/admin/insights/prioritize', { method: 'POST' });
+  prioritizeInsights(jurisdictionCode) {
+    return request(
+      `/api/admin/insights/prioritize${toQueryString({ jurisdiction_code: jurisdictionCode || null })}`,
+      { method: 'POST' }
+    );
   },
 
   /**

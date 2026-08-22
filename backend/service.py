@@ -38,6 +38,7 @@ from backend.repository import (
     count_issues_by_status,
     create_issue_from_civic_issue,
     get_active_issues_for_briefing,
+    get_default_jurisdiction_id,
     get_assignment_history,
     get_department_by_code,
     get_department_issue_counts,
@@ -107,17 +108,25 @@ def _department_summary(department: Department | None) -> DepartmentSummary | No
 def submit_complaint(db: Session, text: str) -> Issue:
     """Analyze citizen complaint text and persist the result as an Issue.
 
-    Exceptions from analyze_complaint (ValueError, EnvironmentError,
-    google.genai.errors.APIError) propagate unchanged -- the route already
-    knows how to translate those into sanitized HTTP responses for
-    POST /api/analyze, and does the same here. On a persistence failure,
-    the session is rolled back before the SQLAlchemyError is re-raised, so
-    the route (and the request's session) are left in a clean state.
+    Every new Issue is scoped to the environment-configured default
+    jurisdiction (Milestone 17) -- see
+    backend.repository.get_default_jurisdiction_id. This is resolved
+    FIRST, before calling Gemini, so a misconfigured deployment fails
+    fast without spending an AI call it would have to discard anyway.
+
+    Exceptions from get_default_jurisdiction_id or analyze_complaint
+    (ValueError, EnvironmentError, google.genai.errors.APIError)
+    propagate unchanged -- the route already knows how to translate those
+    into sanitized HTTP responses for POST /api/issues, and does the same
+    here. On a persistence failure, the session is rolled back before the
+    SQLAlchemyError is re-raised, so the route (and the request's
+    session) are left in a clean state.
     """
+    jurisdiction_id = get_default_jurisdiction_id(db)
     civic_issue = analyze_complaint(text)
 
     try:
-        return create_issue_from_civic_issue(db, civic_issue)
+        return create_issue_from_civic_issue(db, civic_issue, jurisdiction_id)
     except SQLAlchemyError:
         db.rollback()
         raise
@@ -451,12 +460,18 @@ def list_stale_issues(
 # --- Civic Intelligence & Analytics (Milestone 9) ----------------------------
 
 
-def get_status_funnel(db: Session) -> FunnelResponse:
+def get_status_funnel(
+    db: Session, *, jurisdiction_code: str | None = None
+) -> FunnelResponse | None:
     """Dashboard-ready status funnel. Reuses count_issues_by_status()
     (Milestone 8) rather than issuing a duplicate GROUP BY query -- only
     the response shape differs (an ordered list for a funnel chart,
-    instead of a dict). Never calls Gemini."""
-    by_status = count_issues_by_status(db)
+    instead of a dict). jurisdiction_code scopes via Issue.jurisdiction_id
+    (Milestone 17); returns None if the code doesn't match any real
+    jurisdiction (route -> 404). Never calls Gemini."""
+    by_status = count_issues_by_status(db, jurisdiction_code=jurisdiction_code)
+    if by_status is None:
+        return None
     stages = [
         FunnelStage(status=status_value, status_label=_status_label(status_value), count=count)
         for status_value, count in by_status.items()
@@ -464,11 +479,18 @@ def get_status_funnel(db: Session) -> FunnelResponse:
     return FunnelResponse(stages=stages, total_issues=sum(by_status.values()))
 
 
-def get_severity_distribution(db: Session) -> SeverityDistributionResponse:
+def get_severity_distribution(
+    db: Session, *, jurisdiction_code: str | None = None
+) -> SeverityDistributionResponse | None:
     """Severity breakdown with percentages. Reuses
     count_issues_by_severity() (Milestone 8) -- no duplicate query. Uses
-    the existing SeverityLevel enum only. Never calls Gemini."""
-    by_severity = count_issues_by_severity(db)
+    the existing SeverityLevel enum only. jurisdiction_code scopes via
+    Issue.jurisdiction_id (Milestone 17); returns None if the code
+    doesn't match any real jurisdiction (route -> 404). Never calls
+    Gemini."""
+    by_severity = count_issues_by_severity(db, jurisdiction_code=jurisdiction_code)
+    if by_severity is None:
+        return None
     total = sum(by_severity.values())
     distribution = [
         SeverityDistributionEntry(
@@ -481,10 +503,18 @@ def get_severity_distribution(db: Session) -> SeverityDistributionResponse:
     return SeverityDistributionResponse(distribution=distribution, total_issues=total)
 
 
-def get_department_workload_summary(db: Session) -> DepartmentWorkloadResponse:
+def get_department_workload_summary(
+    db: Session, *, jurisdiction_code: str | None = None
+) -> DepartmentWorkloadResponse | None:
     """Workload (status breakdown + active/resolved/closed rollup) for
     every active department in one call. Based on the OFFICIAL assigned
-    department only, never suggested_department. Never calls Gemini."""
+    department only, never suggested_department. jurisdiction_code scopes
+    to departments belonging to that jurisdiction (Milestone 17); returns
+    None if the code doesn't match any real jurisdiction (route -> 404).
+    Never calls Gemini."""
+    workload = get_department_workload(db, jurisdiction_code=jurisdiction_code)
+    if workload is None:
+        return None
     departments = [
         DepartmentWorkloadEntry(
             code=department.code,
@@ -497,30 +527,51 @@ def get_department_workload_summary(db: Session) -> DepartmentWorkloadResponse:
             closed_issues=by_status[IssueStatus.CLOSED],
             by_status=by_status,
         )
-        for department, by_status in get_department_workload(db)
+        for department, by_status in workload
     ]
     return DepartmentWorkloadResponse(departments=departments)
 
 
-def get_aging_buckets(db: Session) -> AgingBucketsResponse:
+def get_aging_buckets(
+    db: Session, *, jurisdiction_code: str | None = None
+) -> AgingBucketsResponse | None:
     """Age-since-submission distribution for currently active issues.
-    Neutral duration buckets, not SLA targets. Never calls Gemini."""
-    buckets = get_issue_aging_buckets(db)
+    Neutral duration buckets, not SLA targets. jurisdiction_code scopes
+    via Issue.jurisdiction_id (Milestone 17); returns None if the code
+    doesn't match any real jurisdiction (route -> 404). Never calls
+    Gemini."""
+    buckets = get_issue_aging_buckets(db, jurisdiction_code=jurisdiction_code)
+    if buckets is None:
+        return None
     return AgingBucketsResponse(
         buckets=[AgingBucketEntry(bucket=label, count=count) for label, count in buckets.items()],
         total_active_issues=sum(buckets.values()),
     )
 
 
-def get_resolution_timing(db: Session) -> ResolutionTimingResponse:
-    """Resolution/closure timing metrics. Never calls Gemini."""
-    metrics = get_resolution_timing_metrics(db)
+def get_resolution_timing(
+    db: Session, *, jurisdiction_code: str | None = None
+) -> ResolutionTimingResponse | None:
+    """Resolution/closure timing metrics. jurisdiction_code scopes via
+    Issue.jurisdiction_id (Milestone 17); returns None if the code
+    doesn't match any real jurisdiction (route -> 404). Never calls
+    Gemini."""
+    metrics = get_resolution_timing_metrics(db, jurisdiction_code=jurisdiction_code)
+    if metrics is None:
+        return None
     return ResolutionTimingResponse(**metrics)
 
 
-def get_recent_activity_feed(db: Session, limit: int = 20) -> RecentActivityResponse:
-    """Most recent status-transition events system-wide, newest first.
-    Never calls Gemini."""
+def get_recent_activity_feed(
+    db: Session, limit: int = 20, *, jurisdiction_code: str | None = None
+) -> RecentActivityResponse | None:
+    """Most recent status-transition events, newest first.
+    jurisdiction_code scopes via Issue.jurisdiction_id (Milestone 17);
+    returns None if the code doesn't match any real jurisdiction (route
+    -> 404). Never calls Gemini."""
+    activity = get_recent_activity(db, limit=limit, jurisdiction_code=jurisdiction_code)
+    if activity is None:
+        return None
     activities = [
         RecentActivityEntry(
             public_id=issue.public_id,
@@ -530,7 +581,7 @@ def get_recent_activity_feed(db: Session, limit: int = 20) -> RecentActivityResp
             reason=history_entry.reason,
             changed_at=history_entry.changed_at,
         )
-        for history_entry, issue in get_recent_activity(db, limit=limit)
+        for history_entry, issue in activity
     ]
     return RecentActivityResponse(activities=activities)
 
@@ -538,7 +589,9 @@ def get_recent_activity_feed(db: Session, limit: int = 20) -> RecentActivityResp
 # --- Civic Accountability & Intelligence (Milestone 10) ----------------------
 
 
-def get_civic_insights(db: Session) -> InsightsResponse:
+def get_civic_insights(
+    db: Session, *, jurisdiction_code: str | None = None
+) -> InsightsResponse | None:
     """Compute every grounded, deterministic civic insight.
 
     Purely deterministic -- never calls Gemini. Reuses existing Milestone
@@ -549,44 +602,62 @@ def get_civic_insights(db: Session) -> InsightsResponse:
     compute. The actual "does this data support an insight" decisions live
     in backend/insights.py, kept separate and DB-free so those rules are
     unit-testable without a database.
+
+    jurisdiction_code (Milestone 17) scopes every underlying query to that
+    jurisdiction's subtree, so insights are computed only from issues
+    inside the current jurisdiction -- returns None if the code doesn't
+    match any real jurisdiction (route -> 404).
     """
     insights: list[Insight] = []
 
-    high_severity_insight = insight_rules.build_high_severity_insight(
-        count_active_high_severity_issues(db)
-    )
+    high_severity_counts = count_active_high_severity_issues(db, jurisdiction_code=jurisdiction_code)
+    if high_severity_counts is None:
+        return None
+    high_severity_insight = insight_rules.build_high_severity_insight(high_severity_counts)
     if high_severity_insight is not None:
         insights.append(high_severity_insight)
 
+    workload = get_department_workload(db, jurisdiction_code=jurisdiction_code)
+    if workload is None:
+        return None
     department_active_counts = [
         (
             department.code,
             department.name,
             sum(count for st, count in by_status.items() if st not in TERMINAL_STATUSES),
         )
-        for department, by_status in get_department_workload(db)
+        for department, by_status in workload
     ]
     insights.extend(insight_rules.build_department_concentration_insights(department_active_counts))
 
     # Reuse the existing stale-issues query (Milestone 8) purely for its
     # `total` -- limit=1 avoids fetching the full item list we don't need
     # here.
-    _stale_items, stale_total = repo_get_stale_issues(db, older_than_hours=48, limit=1, offset=0)
+    stale_result = repo_get_stale_issues(
+        db, older_than_hours=48, limit=1, offset=0, jurisdiction_code=jurisdiction_code
+    )
+    if stale_result is None:
+        return None
+    _stale_items, stale_total = stale_result
     stale_insight = insight_rules.build_stale_concentration_insight(
         stale_total, older_than_hours=48
     )
     if stale_insight is not None:
         insights.append(stale_insight)
 
-    category_counts = {
-        category.value: count for category, count in count_active_issues_by_category(db).items()
-    }
+    category_result = count_active_issues_by_category(db, jurisdiction_code=jurisdiction_code)
+    if category_result is None:
+        return None
+    category_counts = {category.value: count for category, count in category_result.items()}
     recurring_insight = insight_rules.build_recurring_category_insight(category_counts)
     if recurring_insight is not None:
         insights.append(recurring_insight)
 
+    status_counts = count_issues_by_status(db, jurisdiction_code=jurisdiction_code)
+    if status_counts is None:
+        return None
     bottleneck_insight = insight_rules.build_lifecycle_bottleneck_insight(
-        count_issues_by_status(db), TERMINAL_STATUSES
+        status_counts, TERMINAL_STATUSES
     )
     if bottleneck_insight is not None:
         insights.append(bottleneck_insight)
@@ -594,7 +665,9 @@ def get_civic_insights(db: Session) -> InsightsResponse:
     return InsightsResponse(insights=insights, generated_at=datetime.now(timezone.utc))
 
 
-def get_prioritized_insights(db: Session) -> PrioritizedInsightsResponse:
+def get_prioritized_insights(
+    db: Session, *, jurisdiction_code: str | None = None
+) -> PrioritizedInsightsResponse | None:
     """Compute grounded insights, then ask Gemini for an advisory priority
     order and explanation over them.
 
@@ -604,6 +677,10 @@ def get_prioritized_insights(db: Session) -> PrioritizedInsightsResponse:
     boundary. Only aggregate, non-identifying insight fields are sent to
     Gemini (never original_text, public_id, or confidence).
 
+    jurisdiction_code (Milestone 17) scopes the underlying insights the
+    same way GET /api/admin/insights does; returns None if the code
+    doesn't match any real jurisdiction (route -> 404).
+
     If there are no insights, Gemini is never called (nothing to
     prioritize, and calling it anyway would risk fabricating a
     recommendation with no grounding). If Gemini is unavailable, fails, or
@@ -611,7 +688,9 @@ def get_prioritized_insights(db: Session) -> PrioritizedInsightsResponse:
     with ai_recommendation=None and a sanitized ai_recommendation_error --
     their value doesn't depend on Gemini succeeding.
     """
-    insights_response = get_civic_insights(db)
+    insights_response = get_civic_insights(db, jurisdiction_code=jurisdiction_code)
+    if insights_response is None:
+        return None
     if not insights_response.insights:
         return PrioritizedInsightsResponse(
             insights=[], ai_recommendation=None, ai_recommendation_error=None

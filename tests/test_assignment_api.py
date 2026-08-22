@@ -20,7 +20,7 @@ from ai.schemas import CivicIssue, IssueCategory, SeverityLevel
 from backend.database import Base, build_engine, get_db
 from backend.auth import get_current_authority
 from backend.main import app
-from backend.models import Department
+from backend.models import Department, Jurisdiction, JurisdictionLevel
 
 
 def _sample_civic_issue(**overrides) -> CivicIssue:
@@ -46,6 +46,12 @@ def client(tmp_path):
     # Seed two active departments + one inactive, directly (not via the
     # Alembic migration -- this is a schema-only temp DB).
     seed_db = TestingSessionLocal()
+    jurisdiction = Jurisdiction(
+        code="IN-WB-NADIA-KRISHNANAGAR", name="Krishnanagar Municipality",
+        level=JurisdictionLevel.LOCAL_BODY, country_code="IN",
+    )
+    seed_db.add(jurisdiction)
+    seed_db.commit()
     seed_db.add_all(
         [
             Department(code="STREET_LIGHTING", name="Street Lighting", is_active=True),
