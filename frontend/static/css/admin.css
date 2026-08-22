@@ -188,6 +188,7 @@
 }
 
 .bar-viz__fill {
+  display: block;
   height: 100%;
   border-radius: var(--radius-full);
   background: var(--color-action);
