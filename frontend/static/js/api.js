@@ -264,6 +264,14 @@ const CivicSyncApi = {
     );
   },
 
+  /** Resolution/reopening/evidence-coverage KPIs (Milestone 19). */
+  getResolutionIntelligence(jurisdictionCode) {
+    return request(
+      `/api/admin/analytics/resolution-intelligence${toQueryString({ jurisdiction_code: jurisdictionCode || null })}`,
+      { method: 'GET' }
+    );
+  },
+
   /** Most recent status-transition events. */
   getRecentActivity(limit, jurisdictionCode) {
     return request(

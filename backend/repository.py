@@ -389,6 +389,122 @@ def decide_reopen_request(
     return request
 
 
+# --- Resolution & reopening operational intelligence (Milestone 19) ----------
+
+
+def get_resolution_intelligence(
+    db: Session, *, jurisdiction_code: str | None = None
+) -> dict | None:
+    """Compute every resolution/reopening/evidence-coverage KPI in one
+    pass (Milestone 19).
+
+    jurisdiction_code scopes to that jurisdiction's subtree via
+    Issue.jurisdiction_id, the same primitive every other jurisdiction
+    -aware analytics function in this module uses. Returns None if the
+    code doesn't match any real jurisdiction (caller maps that to 404).
+
+    "Total resolved" counts issues that have EVER been resolved
+    (resolved_at IS NOT NULL) -- this correctly includes an issue that
+    was later REOPENED (it still represents a completed resolution
+    event, just one a citizen disputed), not only issues currently
+    sitting in RESOLVED/CLOSED status.
+
+    Median is computed in Python (SQLite has no native MEDIAN
+    aggregate) over the same small set of resolved issues already
+    needed for the evidence-coverage count below -- one query, not two.
+    """
+    subtree_ids = None
+    if jurisdiction_code is not None:
+        subtree_ids = get_jurisdiction_subtree_ids(db, jurisdiction_code)
+        if subtree_ids is None:
+            return None
+
+    issues_query = db.query(Issue)
+    if subtree_ids is not None:
+        issues_query = issues_query.filter(Issue.jurisdiction_id.in_(subtree_ids))
+
+    total_issues = issues_query.count()
+    total_non_rejected = issues_query.filter(Issue.status != IssueStatus.REJECTED).count()
+    currently_reopened = issues_query.filter(Issue.status == IssueStatus.REOPENED).count()
+
+    resolved_issues = issues_query.filter(Issue.resolved_at.isnot(None)).all()
+    total_resolved = len(resolved_issues)
+
+    resolution_hours = sorted(
+        (issue.resolved_at - issue.created_at).total_seconds() / 3600.0
+        for issue in resolved_issues
+    )
+    avg_resolution_hours = (
+        sum(resolution_hours) / len(resolution_hours) if resolution_hours else None
+    )
+    if resolution_hours:
+        mid = len(resolution_hours) // 2
+        if len(resolution_hours) % 2 == 1:
+            median_resolution_hours = resolution_hours[mid]
+        else:
+            median_resolution_hours = (resolution_hours[mid - 1] + resolution_hours[mid]) / 2
+    else:
+        median_resolution_hours = None
+
+    resolved_issue_ids = [issue.id for issue in resolved_issues]
+    issue_ids_with_evidence: set[int] = set()
+    if resolved_issue_ids:
+        rows = (
+            db.query(ResolutionEvidence.issue_id)
+            .filter(ResolutionEvidence.issue_id.in_(resolved_issue_ids))
+            .distinct()
+            .all()
+        )
+        issue_ids_with_evidence = {row[0] for row in rows}
+    resolutions_with_evidence = len(issue_ids_with_evidence)
+    resolutions_without_evidence = total_resolved - resolutions_with_evidence
+
+    reopen_requests_query = db.query(ReopenRequest).join(Issue, ReopenRequest.issue_id == Issue.id)
+    if subtree_ids is not None:
+        reopen_requests_query = reopen_requests_query.filter(Issue.jurisdiction_id.in_(subtree_ids))
+    total_reopen_requests = reopen_requests_query.count()
+    pending_reopen_requests = reopen_requests_query.filter(
+        ReopenRequest.state == ReopenRequestState.PENDING
+    ).count()
+    approved_reopen_requests = reopen_requests_query.filter(
+        ReopenRequest.state == ReopenRequestState.APPROVED
+    ).count()
+    rejected_reopen_requests = reopen_requests_query.filter(
+        ReopenRequest.state == ReopenRequestState.REJECTED
+    ).count()
+
+    approved_by_category_rows = (
+        db.query(Issue.category, func.count(ReopenRequest.id))
+        .join(ReopenRequest, ReopenRequest.issue_id == Issue.id)
+        .filter(ReopenRequest.state == ReopenRequestState.APPROVED)
+    )
+    if subtree_ids is not None:
+        approved_by_category_rows = approved_by_category_rows.filter(
+            Issue.jurisdiction_id.in_(subtree_ids)
+        )
+    approved_by_category = {
+        category.value: count
+        for category, count in approved_by_category_rows.group_by(Issue.category).all()
+        if count > 0
+    }
+
+    return {
+        "total_issues": total_issues,
+        "total_non_rejected_issues": total_non_rejected,
+        "total_resolved": total_resolved,
+        "avg_resolution_hours": avg_resolution_hours,
+        "median_resolution_hours": median_resolution_hours,
+        "currently_reopened": currently_reopened,
+        "total_reopen_requests": total_reopen_requests,
+        "pending_reopen_requests": pending_reopen_requests,
+        "approved_reopen_requests": approved_reopen_requests,
+        "rejected_reopen_requests": rejected_reopen_requests,
+        "resolutions_with_evidence": resolutions_with_evidence,
+        "resolutions_without_evidence": resolutions_without_evidence,
+        "approved_reopens_by_category": approved_by_category,
+    }
+
+
 def get_status_history(db: Session, issue: Issue) -> list[IssueStatusHistory]:
     """Return an Issue's status history, oldest first."""
     return (

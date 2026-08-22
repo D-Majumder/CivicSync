@@ -51,6 +51,10 @@ from backend.schemas import DepartmentSummary, Insight, InsightPriority
 # baseline activity that doesn't need a flag.
 
 STALE_CONCENTRATION_MIN_COUNT = 3
+# Milestone 19: a single reopened issue is still worth surfacing (unlike
+# the concentration-pattern insights above) -- a citizen-disputed
+# resolution is inherently notable even in isolation.
+REOPENED_ATTENTION_MIN_COUNT = 1
 """Fewer than this many stale issues is routine, not a "concentration"."""
 
 RECURRING_CATEGORY_MIN_ACTIVE_TOTAL = 5
@@ -167,6 +171,29 @@ def build_stale_concentration_insight(stale_count: int, older_than_hours: int) -
         affected_department=None,
         evidence={"stale_count": stale_count, "older_than_hours": older_than_hours},
         recommended_action="Review these issues for follow-up or a status update.",
+    )
+
+
+def build_reopened_attention_insight(reopened_count: int) -> Insight | None:
+    """Issues currently in REOPENED status (Milestone 18, Phase 5) --
+    each one represents a citizen who disputed a resolution and had that
+    request approved, so this deserves attention even at count=1, unlike
+    the concentration-pattern insights above."""
+    if reopened_count < REOPENED_ATTENTION_MIN_COUNT:
+        return None
+
+    return Insight(
+        insight_type="reopened_issues_attention",
+        priority=InsightPriority.HIGH,
+        title="Reopened issues need follow-up",
+        summary=(
+            f"{reopened_count} issue(s) were reopened after an authority-approved "
+            "citizen dispute of the original resolution."
+        ),
+        affected_issue_count=reopened_count,
+        affected_department=None,
+        evidence={"reopened_count": reopened_count},
+        recommended_action="Review and re-resolve these issues, addressing the citizen's stated concern.",
     )
 
 

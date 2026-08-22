@@ -215,13 +215,14 @@
 
   async function loadDashboard() {
     showGlobalError(null);
-    const [summaryR, funnelR, severityR, workloadR, agingR, activityR] = await Promise.allSettled([
+    const [summaryR, funnelR, severityR, workloadR, agingR, activityR, resolutionIntelR] = await Promise.allSettled([
       CivicSyncApi.getDashboardSummary({ jurisdiction_code: state.currentJurisdictionCode || null }),
       CivicSyncApi.getFunnel(state.currentJurisdictionCode),
       CivicSyncApi.getSeverityDistribution(state.currentJurisdictionCode),
       CivicSyncApi.getDepartmentWorkload(state.currentJurisdictionCode),
       CivicSyncApi.getAgingBuckets(state.currentJurisdictionCode),
       CivicSyncApi.getRecentActivity(10, state.currentJurisdictionCode),
+      CivicSyncApi.getResolutionIntelligence(state.currentJurisdictionCode),
     ]);
 
     if (summaryR.status === 'fulfilled') {
@@ -238,6 +239,27 @@
       document.getElementById('kpi-high-critical').textContent = highCritical;
     } else {
       showGlobalError('Could not load dashboard summary: ' + summaryR.reason.message);
+    }
+
+    const resolutionIntelError = document.getElementById('resolution-intel-error');
+    if (resolutionIntelR.status === 'fulfilled') {
+      resolutionIntelError.hidden = true;
+      const r = resolutionIntelR.value;
+      const pct = (value) => (value === null || value === undefined ? '\u2014' : `${value}%`);
+      const hours = (value) =>
+        value === null || value === undefined ? '\u2014' : `${value}h`;
+      document.getElementById('kpi-resolution-rate').textContent = pct(r.resolution_rate_percent);
+      document.getElementById('kpi-avg-resolution-time').textContent = hours(r.avg_resolution_hours);
+      document.getElementById('kpi-reopen-rate').textContent = pct(r.reopen_rate_percent);
+      document.getElementById('kpi-evidence-coverage').textContent = pct(r.evidence_coverage_percent);
+      document.getElementById('kpi-pending-reopens').textContent = r.pending_reopen_requests;
+    } else {
+      resolutionIntelError.hidden = false;
+      resolutionIntelError.textContent =
+        'Could not load resolution & reopening metrics: ' + resolutionIntelR.reason.message;
+      ['kpi-resolution-rate', 'kpi-avg-resolution-time', 'kpi-reopen-rate', 'kpi-evidence-coverage', 'kpi-pending-reopens'].forEach(
+        (id) => (document.getElementById(id).textContent = '\u2014')
+      );
     }
 
     if (funnelR.status === 'fulfilled') {

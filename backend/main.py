@@ -62,6 +62,7 @@ from backend.schemas import (
     ReopenRequestCreate,
     ReopenRequestResponse,
     RecentActivityResponse,
+    ResolutionIntelligenceResponse,
     ResolutionTimingResponse,
     ResolveIssueRequest,
     SeverityDistributionResponse,
@@ -88,6 +89,7 @@ from backend.service import (
     decide_reopen_request,
     request_issue_reopen,
     get_recent_activity_feed,
+    get_resolution_intelligence,
     get_resolution_timing,
     get_severity_distribution,
     get_status_funnel,
@@ -1158,6 +1160,33 @@ def read_resolution_timing(
     authority: str = Depends(get_current_authority),
 ) -> ResolutionTimingResponse:
     result = get_resolution_timing(db, jurisdiction_code=jurisdiction_code)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Jurisdiction not found."
+        )
+    return result
+
+
+@app.get(
+    "/api/admin/analytics/resolution-intelligence",
+    response_model=ResolutionIntelligenceResponse,
+    status_code=status.HTTP_200_OK,
+    summary="[INTERNAL/AUTHORITY] Resolution, reopening, and evidence-coverage KPIs",
+    description=(
+        "INTERNAL AUTHORITY API -- not authenticated yet. Resolution rate, "
+        "average/median resolution time, reopen counts and rate, and evidence "
+        "coverage, all scoped to the given jurisdiction (Milestone 19). Purely "
+        "deterministic -- never calls Gemini, never mutates any Issue, "
+        "ReopenRequest, or history row."
+    ),
+    responses={status.HTTP_404_NOT_FOUND: {"description": "Jurisdiction not found."}},
+)
+def read_resolution_intelligence(
+    jurisdiction_code: str | None = Query(default=None, description="Scope to this jurisdiction and its descendants."),
+    db: Session = Depends(get_db),
+    authority: str = Depends(get_current_authority),
+) -> ResolutionIntelligenceResponse:
+    result = get_resolution_intelligence(db, jurisdiction_code=jurisdiction_code)
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Jurisdiction not found."

@@ -509,6 +509,43 @@ class DepartmentIssueCount(BaseModel):
     count: int
 
 
+class CategoryReopenCount(BaseModel):
+    """One row of ResolutionIntelligenceResponse.approved_reopens_by_category."""
+
+    category: IssueCategory
+    count: int
+
+
+class ResolutionIntelligenceResponse(BaseModel):
+    """Resolution, reopening, and evidence-coverage KPIs for
+    GET /api/admin/analytics/resolution-intelligence (Milestone 19).
+
+    Every rate/percentage field is None (never 0 or a fabricated value)
+    when its denominator is zero -- e.g. resolution_rate_percent is None
+    for a jurisdiction with no non-rejected issues yet, rather than a
+    misleading 0%. total_resolved counts issues that have EVER been
+    resolved (resolved_at IS NOT NULL), including ones later reopened --
+    see backend.repository.get_resolution_intelligence for the full
+    computation.
+    """
+
+    total_issues: int
+    total_resolved: int
+    resolution_rate_percent: float | None
+    avg_resolution_hours: float | None
+    median_resolution_hours: float | None
+    currently_reopened: int
+    total_reopen_requests: int
+    pending_reopen_requests: int
+    approved_reopen_requests: int
+    rejected_reopen_requests: int
+    reopen_rate_percent: float | None
+    resolutions_with_evidence: int
+    resolutions_without_evidence: int
+    evidence_coverage_percent: float | None
+    approved_reopens_by_category: list[CategoryReopenCount]
+
+
 class DashboardSummaryResponse(BaseModel):
     """Aggregate operational counts for GET /api/admin/dashboard/summary.
 

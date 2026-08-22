@@ -56,6 +56,7 @@ from backend.repository import (
     get_jurisdictions_with_ancestry,
     get_operational_queue as repo_get_operational_queue,
     get_recent_activity,
+    get_resolution_intelligence as repo_get_resolution_intelligence,
     get_resolution_timing_metrics,
     get_stale_issues as repo_get_stale_issues,
     get_status_history,
@@ -102,6 +103,8 @@ from backend.schemas import (
     PublicTimelineEntry,
     RecentActivityEntry,
     RecentActivityResponse,
+    CategoryReopenCount,
+    ResolutionIntelligenceResponse,
     ResolutionTimingResponse,
     SeverityDistributionEntry,
     SeverityDistributionResponse,
@@ -743,6 +746,65 @@ def get_resolution_timing(
     return ResolutionTimingResponse(**metrics)
 
 
+def get_resolution_intelligence(
+    db: Session, *, jurisdiction_code: str | None = None
+) -> ResolutionIntelligenceResponse | None:
+    """Resolution, reopening, and evidence-coverage KPIs (Milestone 19).
+    jurisdiction_code scopes via Issue.jurisdiction_id, the same
+    convention as every other jurisdiction-aware analytics function in
+    this module; returns None if the code doesn't match any real
+    jurisdiction (route -> 404). Purely deterministic -- never calls
+    Gemini, and never mutates any Issue, ReopenRequest, or history row.
+    """
+    raw = repo_get_resolution_intelligence(db, jurisdiction_code=jurisdiction_code)
+    if raw is None:
+        return None
+
+    total_resolved = raw["total_resolved"]
+    resolution_rate_percent = (
+        round(100 * total_resolved / raw["total_non_rejected_issues"], 1)
+        if raw["total_non_rejected_issues"] > 0
+        else None
+    )
+    reopen_rate_percent = (
+        round(100 * raw["approved_reopen_requests"] / total_resolved, 1)
+        if total_resolved > 0
+        else None
+    )
+    evidence_coverage_percent = (
+        round(100 * raw["resolutions_with_evidence"] / total_resolved, 1)
+        if total_resolved > 0
+        else None
+    )
+
+    return ResolutionIntelligenceResponse(
+        total_issues=raw["total_issues"],
+        total_resolved=total_resolved,
+        resolution_rate_percent=resolution_rate_percent,
+        avg_resolution_hours=(
+            round(raw["avg_resolution_hours"], 1) if raw["avg_resolution_hours"] is not None else None
+        ),
+        median_resolution_hours=(
+            round(raw["median_resolution_hours"], 1)
+            if raw["median_resolution_hours"] is not None
+            else None
+        ),
+        currently_reopened=raw["currently_reopened"],
+        total_reopen_requests=raw["total_reopen_requests"],
+        pending_reopen_requests=raw["pending_reopen_requests"],
+        approved_reopen_requests=raw["approved_reopen_requests"],
+        rejected_reopen_requests=raw["rejected_reopen_requests"],
+        reopen_rate_percent=reopen_rate_percent,
+        resolutions_with_evidence=raw["resolutions_with_evidence"],
+        resolutions_without_evidence=raw["resolutions_without_evidence"],
+        evidence_coverage_percent=evidence_coverage_percent,
+        approved_reopens_by_category=[
+            CategoryReopenCount(category=category, count=count)
+            for category, count in raw["approved_reopens_by_category"].items()
+        ],
+    )
+
+
 def get_recent_activity_feed(
     db: Session, limit: int = 20, *, jurisdiction_code: str | None = None
 ) -> RecentActivityResponse | None:
@@ -842,6 +904,14 @@ def get_civic_insights(
     )
     if bottleneck_insight is not None:
         insights.append(bottleneck_insight)
+
+    # Milestone 19: reuses status_counts fetched immediately above --
+    # no duplicate query needed.
+    reopened_insight = insight_rules.build_reopened_attention_insight(
+        status_counts[IssueStatus.REOPENED]
+    )
+    if reopened_insight is not None:
+        insights.append(reopened_insight)
 
     return InsightsResponse(insights=insights, generated_at=datetime.now(timezone.utc))
 
