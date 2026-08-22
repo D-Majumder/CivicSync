@@ -14,7 +14,7 @@ from typing import Annotated, Any
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator
 
 from ai.schemas import IssueCategory, SeverityLevel
-from backend.models import IssueStatus, JurisdictionLevel
+from backend.models import IssueStatus, JurisdictionLevel, ReopenRequestState
 
 
 def _tag_naive_datetime_as_utc(value: Any) -> Any:
@@ -158,6 +158,72 @@ class ResolveIssueRequest(BaseModel):
                 "resolution_note must contain a meaningful description, not just whitespace."
             )
         return stripped
+
+
+class ReopenRequestCreate(BaseModel):
+    """Request body for POST /api/track/{public_id}/reopen-request
+    (Milestone 18, Phase 5) -- the citizen-facing endpoint.
+
+    Mirrors ResolveIssueRequest's exact validation pattern: `reason` is
+    REQUIRED and validated as meaningful, not just present. There is no
+    status field here at all -- a citizen can never directly set an
+    issue's status; this only ever creates a PENDING request for an
+    authority to review (see backend/service.py's request_issue_reopen).
+    """
+
+    reason: str = Field(
+        ...,
+        min_length=3,
+        max_length=2000,
+        description="Required explanation of why the resolution was inadequate or the issue has returned.",
+        examples=["The pothole has reappeared after only two weeks."],
+    )
+
+    @field_validator("reason")
+    @classmethod
+    def _reject_whitespace_only(cls, value: str) -> str:
+        stripped = value.strip()
+        if len(stripped) < 3:
+            raise ValueError("reason must contain a meaningful explanation, not just whitespace.")
+        return stripped
+
+
+class ReopenDecisionRequest(BaseModel):
+    """Request body for POST /api/admin/reopen-requests/{request_public_id}/decision
+    (Milestone 18, Phase 5) -- the authority-facing review endpoint.
+
+    `approve` chooses the outcome; `decision_reason` is optional in both
+    directions (an authority may approve/reject with or without
+    additional commentary beyond the citizen's own stated reason).
+    """
+
+    approve: bool = Field(..., description="True to approve and reopen the issue, False to reject.")
+    decision_reason: str | None = Field(
+        default=None,
+        max_length=2000,
+        description="Optional authority commentary on the decision.",
+        examples=["Confirmed the pothole has reappeared; reopening for re-repair."],
+    )
+
+
+class ReopenRequestResponse(BaseModel):
+    """Response shape for reopen-request endpoints, used for BOTH the
+    citizen and authority views (Milestone 18, Phase 5) -- there's
+    nothing authority-only worth exposing here beyond what a citizen
+    already knows about their own request.
+
+    Deliberately excludes decided_by (the reviewing authority's identity
+    stays authority-only, matching Issue.resolved_by's own treatment)
+    and the internal integer id/issue_id -- public_id is the only
+    identifier ever exposed.
+    """
+
+    public_id: str
+    state: ReopenRequestState
+    reason: str
+    created_at: UtcDatetime
+    decision_reason: str | None
+    decided_at: UtcDatetime | None
 
 
 class StatusHistoryEntryResponse(BaseModel):
@@ -315,6 +381,7 @@ class PublicIssueTrackingResponse(BaseModel):
     resolved_at: UtcDatetime | None
     timeline: list[PublicTimelineEntry]
     evidence: list[PublicEvidenceSummary]
+    active_reopen_request: ReopenRequestResponse | None
 
 
 # --- Authority operations (Milestone 8) --------------------------------------
@@ -431,6 +498,7 @@ class AdminIssueDetailResponse(BaseModel):
     status_history: list[AdminStatusHistoryEntry]
     assignment_history: list[AdminAssignmentHistoryEntry]
     evidence: list[EvidenceResponse]
+    pending_reopen_request: ReopenRequestResponse | None
 
 
 class DepartmentIssueCount(BaseModel):

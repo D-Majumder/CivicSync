@@ -58,6 +58,9 @@ from backend.schemas import (
     JurisdictionResponse,
     PrioritizedInsightsResponse,
     PublicIssueTrackingResponse,
+    ReopenDecisionRequest,
+    ReopenRequestCreate,
+    ReopenRequestResponse,
     RecentActivityResponse,
     ResolutionTimingResponse,
     ResolveIssueRequest,
@@ -82,6 +85,8 @@ from backend.service import (
     get_prioritized_insights,
     get_public_evidence_file,
     get_public_tracking,
+    decide_reopen_request,
+    request_issue_reopen,
     get_recent_activity_feed,
     get_resolution_timing,
     get_severity_distribution,
@@ -94,7 +99,12 @@ from backend.service import (
     submit_complaint,
     transition_issue,
 )
-from backend.service import EvidenceTooLargeError, UnsupportedEvidenceTypeError
+from backend.service import (
+    DuplicateReopenRequestError,
+    EvidenceTooLargeError,
+    IssueNotResolvedError,
+    UnsupportedEvidenceTypeError,
+)
 from backend.transitions import InvalidTransitionError
 
 # Load environment variables from .env before anything else (e.g. ai/client.py)
@@ -673,6 +683,49 @@ def get_public_evidence_file_route(
     )
 
 
+@app.post(
+    "/api/track/{public_id}/reopen-request",
+    response_model=ReopenRequestResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Request reopening of a resolved issue (public)",
+    description=(
+        "Public, unauthenticated endpoint (Milestone 18, Phase 5). Creates a "
+        "PENDING request for an authority to review -- this is a REQUEST for "
+        "authority action, NOT an immediate status change. Only permitted for "
+        "an issue currently RESOLVED, and only one pending request may exist "
+        "per issue at a time. Uses the same public tracking identity model as "
+        "GET /api/track/{public_id} -- a citizen can only ever act on the "
+        "specific issue they're already tracking by its public_id."
+    ),
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "No issue found with that tracking id."},
+        status.HTTP_400_BAD_REQUEST: {
+            "description": "The issue is not RESOLVED, or already has a pending reopen request."
+        },
+    },
+)
+def request_reopen_route(
+    request: ReopenRequestCreate,
+    public_id: str = Path(..., pattern=PUBLIC_ID_PATTERN),
+    db: Session = Depends(get_db),
+) -> ReopenRequestResponse:
+    try:
+        result = request_issue_reopen(db, public_id, request.reason)
+    except (IssueNotResolvedError, DuplicateReopenRequestError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from None
+    except SQLAlchemyError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to submit reopen request. Please try again.",
+        ) from None
+
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="No issue found with that tracking id."
+        )
+    return result
+
+
 # ============================================================================
 # Authority Operations API (Milestone 8) -- INTERNAL/AUTHORITY, NOT PUBLIC.
 #
@@ -822,6 +875,54 @@ def read_admin_issue_detail(public_id: str, db: Session = Depends(get_db), autho
             detail="Issue not found.",
         )
     return detail
+
+
+@app.post(
+    "/api/admin/reopen-requests/{request_public_id}/decision",
+    response_model=ReopenRequestResponse,
+    status_code=status.HTTP_200_OK,
+    summary="[INTERNAL/AUTHORITY] Approve or reject a citizen reopen request",
+    description=(
+        "INTERNAL AUTHORITY API -- not authenticated yet. On approval, "
+        "transitions the issue from RESOLVED to REOPENED using the same "
+        "single authoritative transition mechanism every other status "
+        "change in this project uses -- never a parallel status system. "
+        "On rejection, only the request's own state changes; the issue "
+        "remains RESOLVED and no lifecycle history entry is created. "
+        "Citizens have no endpoint that can reach this route."
+    ),
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Reopen request not found."},
+        status.HTTP_400_BAD_REQUEST: {
+            "description": "The issue is no longer RESOLVED (approval only)."
+        },
+    },
+)
+def decide_reopen_request_route(
+    request_public_id: str,
+    request: ReopenDecisionRequest,
+    db: Session = Depends(get_db),
+    authority: str = Depends(get_current_authority),
+) -> ReopenRequestResponse:
+    try:
+        result = decide_reopen_request(
+            db,
+            request_public_id,
+            approve=request.approve,
+            decision_reason=request.decision_reason,
+            decided_by=authority,
+        )
+    except InvalidTransitionError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from None
+    except SQLAlchemyError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to record decision. Please try again.",
+        ) from None
+
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reopen request not found.")
+    return result
 
 
 @app.get(

@@ -452,6 +452,7 @@ def test_response_top_level_fields_are_exactly_the_approved_set(client):
         "resolved_at",
         "timeline",
         "evidence",
+        "active_reopen_request",
     }
 
 

@@ -485,3 +485,78 @@ class IssueAssignmentHistory(Base):
             f"<IssueAssignmentHistory issue_id={self.issue_id!r} "
             f"department_id={self.department_id!r} unassigned_at={self.unassigned_at!r}>"
         )
+
+
+REOPEN_REQUEST_PUBLIC_ID_PATTERN = r"^RRQ-[0-9A-F]{12}$"
+
+
+def generate_reopen_request_public_id() -> str:
+    """Mirrors generate_public_id()/generate_evidence_public_id() exactly
+    (same shape, "RRQ-" prefix) -- same "never expose the internal
+    integer id" convention as every other public-facing identifier in
+    this project."""
+    return f"RRQ-{uuid.uuid4().hex[:12].upper()}"
+
+
+class ReopenRequestState(str, enum.Enum):
+    """Citizen reopen request review state (Milestone 18, Phase 5).
+
+    Deliberately separate from IssueStatus -- a reopen request is a
+    REQUEST for authority action, not a status change itself. Only an
+    authority decision (via the existing lifecycle transition mechanism)
+    ever actually moves the Issue between RESOLVED and REOPENED; this
+    enum only tracks the request's own review lifecycle.
+    """
+
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
+
+class ReopenRequest(Base):
+    """A citizen's request to reopen a RESOLVED issue (Milestone 18,
+    Phase 5).
+
+    Intentionally minimal and independent of Issue's own lifecycle
+    fields -- this table records the REQUEST and its review, never the
+    actual status change (that's still recorded exactly once, in
+    IssueStatusHistory, via the existing transition mechanism -- see
+    backend/repository.py's decide_reopen_request). At most one PENDING
+    request may exist per issue at a time (enforced in
+    backend/service.py's request_issue_reopen, not by a database
+    constraint, matching the project's existing convention of enforcing
+    business rules in the service layer rather than the schema).
+    """
+
+    __tablename__ = "reopen_requests"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    public_id: Mapped[str] = mapped_column(
+        String(20), unique=True, index=True, nullable=False, default=generate_reopen_request_public_id
+    )
+    issue_id: Mapped[int] = mapped_column(ForeignKey("issues.id"), nullable=False, index=True)
+
+    citizen_reason: Mapped[str] = mapped_column(Text, nullable=False)
+    state: Mapped[ReopenRequestState] = mapped_column(
+        SAEnum(ReopenRequestState, native_enum=False, length=20),
+        nullable=False,
+        default=ReopenRequestState.PENDING,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+    # Populated only once an authority decides -- all three null while
+    # PENDING. decided_by is the authenticated authority identity (see
+    # backend/auth.py's get_current_authority) -- never accepted from
+    # request input, and never exposed in any API response (same
+    # authority-only treatment as Issue.resolved_by -- see Milestone 18
+    # Phase 4's ReopenRequestResponse, which omits it).
+    decision_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    decided_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    issue: Mapped["Issue"] = relationship()
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging convenience
+        return f"<ReopenRequest public_id={self.public_id!r} state={self.state!r}>"

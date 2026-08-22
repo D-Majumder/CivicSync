@@ -33,7 +33,7 @@ from ai.client import (
 from ai.schemas import IssueCategory, SeverityLevel
 from backend import insights as insight_rules
 from backend.assignment_rules import DepartmentInactiveError, DepartmentNotFoundError
-from backend.models import Department, Issue, IssueStatus, JurisdictionLevel
+from backend.models import Department, Issue, IssueStatus, JurisdictionLevel, ReopenRequest
 from backend.repository import (
     TERMINAL_STATUSES,
     assign_department_to_issue,
@@ -61,8 +61,12 @@ from backend.repository import (
     get_status_history,
     list_issues_for_admin,
     create_evidence,
+    create_reopen_request,
+    decide_reopen_request as repo_decide_reopen_request,
     get_evidence_by_public_id,
     get_evidence_for_issue,
+    get_pending_reopen_request,
+    get_reopen_request_by_public_id,
     resolve_issue as repo_resolve_issue,
     transition_issue_status,
 )
@@ -93,6 +97,7 @@ from backend.schemas import (
     OperationalBriefingResponse,
     PrioritizedInsightsResponse,
     PublicEvidenceSummary,
+    ReopenRequestResponse,
     PublicIssueTrackingResponse,
     PublicTimelineEntry,
     RecentActivityEntry,
@@ -194,6 +199,116 @@ def resolve_issue(
         raise
 
 
+# --- Citizen reopen requests (Milestone 18, Phase 5) --------------------------
+
+
+class IssueNotResolvedError(Exception):
+    """Raised when a reopen request is attempted against an issue that
+    isn't currently RESOLVED. The route maps this to 400."""
+
+
+class DuplicateReopenRequestError(Exception):
+    """Raised when an issue already has a PENDING reopen request. The
+    route maps this to 400."""
+
+
+def request_issue_reopen(db: Session, public_id: str, reason: str) -> ReopenRequestResponse | None:
+    """Citizen-facing: create a PENDING reopen request for a RESOLVED
+    issue (Milestone 18, Phase 5).
+
+    Returns None if no Issue matches public_id (route -> 404). Raises
+    IssueNotResolvedError if the issue isn't currently RESOLVED, or
+    DuplicateReopenRequestError if a PENDING request already exists for
+    it -- both map to 400. This NEVER touches Issue.status -- creating a
+    request is not itself a status change; see decide_reopen_request for
+    the only path that can actually move the issue.
+    """
+    issue = get_issue_by_public_id(db, public_id)
+    if issue is None:
+        return None
+
+    if issue.status != IssueStatus.RESOLVED:
+        raise IssueNotResolvedError(
+            "Reopening can only be requested for a RESOLVED issue."
+        )
+    if get_pending_reopen_request(db, issue) is not None:
+        raise DuplicateReopenRequestError(
+            "This issue already has a pending reopen request."
+        )
+
+    try:
+        request = create_reopen_request(db, issue, reason)
+    except SQLAlchemyError:
+        db.rollback()
+        raise
+
+    return _to_reopen_request_response(request)
+
+
+def get_issue_pending_reopen_request(db: Session, issue: Issue) -> ReopenRequestResponse | None:
+    """Authority- and citizen-facing: the issue's current PENDING reopen
+    request (or None), reused by both get_admin_issue_detail and
+    get_public_tracking so the shape is identical everywhere it appears.
+    """
+    request = get_pending_reopen_request(db, issue)
+    if request is None:
+        return None
+    return _to_reopen_request_response(request)
+
+
+def decide_reopen_request(
+    db: Session,
+    request_public_id: str,
+    *,
+    approve: bool,
+    decision_reason: str | None,
+    decided_by: str,
+) -> ReopenRequestResponse | None:
+    """Authority-facing: approve or reject a reopen request (Milestone
+    18, Phase 5).
+
+    Returns None if no request matches request_public_id (route -> 404).
+    Raises InvalidTransitionError (from backend.transitions) if approving
+    and the issue is no longer RESOLVED -- the route maps that to 400,
+    the same as every other illegal transition in this project. On a
+    persistence failure, the session is rolled back before the
+    SQLAlchemyError is re-raised.
+
+    `decided_by` must be the server-side authenticated authority
+    identity -- never accepted from request input. Citizens have no
+    endpoint that can reach this function at all.
+    """
+    request = get_reopen_request_by_public_id(db, request_public_id)
+    if request is None:
+        return None
+
+    try:
+        decided = repo_decide_reopen_request(
+            db,
+            request,
+            request.issue,
+            approve=approve,
+            decision_reason=decision_reason,
+            decided_by=decided_by,
+        )
+    except SQLAlchemyError:
+        db.rollback()
+        raise
+
+    return _to_reopen_request_response(decided)
+
+
+def _to_reopen_request_response(request: ReopenRequest) -> ReopenRequestResponse:
+    return ReopenRequestResponse(
+        public_id=request.public_id,
+        state=request.state,
+        reason=request.citizen_reason,
+        created_at=request.created_at,
+        decision_reason=request.decision_reason,
+        decided_at=request.decided_at,
+    )
+
+
 def assign_issue_department(
     db: Session, public_id: str, department_code: str, reason: str | None = None
 ) -> Issue | None:
@@ -282,6 +397,7 @@ def get_public_tracking(db: Session, public_id: str) -> PublicIssueTrackingRespo
         resolved_at=issue.resolved_at,
         timeline=timeline,
         evidence=evidence,
+        active_reopen_request=get_issue_pending_reopen_request(db, issue),
     )
 
 
@@ -403,6 +519,7 @@ def get_admin_issue_detail(db: Session, public_id: str) -> AdminIssueDetailRespo
         status_history=status_history,
         assignment_history=assignment_history,
         evidence=evidence,
+        pending_reopen_request=get_issue_pending_reopen_request(db, issue),
     )
 
 

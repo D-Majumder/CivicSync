@@ -36,6 +36,13 @@
   const elResolvedAt = document.getElementById('track-resolved-at');
   const elEvidence = document.getElementById('track-evidence');
   const elEvidenceList = document.getElementById('track-evidence-list');
+  const elReopenSection = document.getElementById('track-reopen-section');
+  const elReopenFormWrapper = document.getElementById('track-reopen-form-wrapper');
+  const elReopenReason = document.getElementById('track-reopen-reason');
+  const elReopenSubmitBtn = document.getElementById('track-reopen-submit-btn');
+  const elReopenFeedback = document.getElementById('track-reopen-feedback');
+  const elReopenStatus = document.getElementById('track-reopen-status');
+  const elReopenStatusText = document.getElementById('track-reopen-status-text');
   const notFoundIdEl = document.getElementById('track-not-found-id');
   const errorMessageEl = document.getElementById('track-error-message');
 
@@ -121,7 +128,47 @@
       elEvidence.hidden = true;
     }
 
+    if (issue.status === 'RESOLVED') {
+      elReopenSection.hidden = false;
+      elReopenFeedback.textContent = '';
+      elReopenFeedback.className = 'action-feedback';
+      if (issue.active_reopen_request) {
+        elReopenFormWrapper.hidden = true;
+        elReopenStatus.hidden = false;
+        elReopenStatusText.textContent =
+          'Your reopening request has been submitted and is pending authority review.';
+      } else {
+        elReopenFormWrapper.hidden = false;
+        elReopenStatus.hidden = true;
+        elReopenReason.value = '';
+      }
+      elReopenSubmitBtn.onclick = () => handleReopenSubmit(issue.public_id);
+    } else {
+      elReopenSection.hidden = true;
+    }
+
     showState(resultState);
+  }
+
+  async function handleReopenSubmit(publicId) {
+    const reason = elReopenReason.value.trim();
+    if (reason.length < 3) {
+      elReopenFeedback.className = 'action-feedback is-error';
+      elReopenFeedback.textContent = 'Please describe why the resolution was inadequate.';
+      return;
+    }
+    elReopenSubmitBtn.disabled = true;
+    elReopenFeedback.className = 'action-feedback';
+    elReopenFeedback.textContent = 'Submitting\u2026';
+    try {
+      await CivicSyncApi.requestReopen(publicId, reason);
+      await loadIssue(publicId); // refresh with the real, post-submission pending state
+    } catch (err) {
+      elReopenFeedback.className = 'action-feedback is-error';
+      elReopenFeedback.textContent = err.message;
+    } finally {
+      elReopenSubmitBtn.disabled = false;
+    }
   }
 
   async function loadIssue(publicId) {

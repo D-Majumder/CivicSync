@@ -767,6 +767,26 @@
         <div class="action-feedback" id="transition-feedback"></div>
       </div>
 
+      ${detail.pending_reopen_request ? `
+      <div class="detail-section">
+        <div class="detail-section-title"><h3 class="type-headline-sm" style="font-size:16px;">Reopening Request</h3></div>
+        <div class="official-panel">
+          <span class="official-panel__label">Citizen Request \u2014 Pending Review</span>
+          <p style="margin-top: 8px;">${CivicSyncUtils.escapeHtml(detail.pending_reopen_request.reason)}</p>
+          <p class="type-body-sm" style="color: var(--color-on-surface-variant); margin-top: 4px;">Submitted ${CivicSyncUtils.formatTimestamp(detail.pending_reopen_request.created_at)}</p>
+        </div>
+        <div class="action-row mt-sm">
+          <div class="filter-field" style="flex: 1;">
+            <label for="reopen-decision-reason-input">Decision Reason (optional)</label>
+            <input type="text" id="reopen-decision-reason-input" placeholder="e.g. Confirmed recurrence on-site" />
+          </div>
+          <button class="btn btn-primary" id="reopen-approve-btn" type="button">Approve &amp; Reopen</button>
+          <button class="btn btn-secondary" id="reopen-reject-btn" type="button">Reject</button>
+        </div>
+        <div class="action-feedback" id="reopen-decision-feedback"></div>
+      </div>
+      ` : ''}
+
       <div class="detail-section">
         <div class="detail-section-title"><h3 class="type-headline-sm" style="font-size:16px;">Resolution Evidence</h3></div>
         <div class="history-list" id="evidence-list">${evidenceListHtml}</div>
@@ -790,6 +810,15 @@
 
     document.getElementById('assign-submit-btn').addEventListener('click', () => handleAssign(detail.public_id));
     document.getElementById('evidence-upload-btn').addEventListener('click', () => handleEvidenceUpload(detail.public_id));
+    if (detail.pending_reopen_request) {
+      const requestId = detail.pending_reopen_request.public_id;
+      document.getElementById('reopen-approve-btn').addEventListener('click', () =>
+        handleReopenDecision(detail.public_id, requestId, true)
+      );
+      document.getElementById('reopen-reject-btn').addEventListener('click', () =>
+        handleReopenDecision(detail.public_id, requestId, false)
+      );
+    }
     modalBody.querySelectorAll('.transition-btn').forEach((btn) => {
       btn.addEventListener('click', () => handleTransition(detail.public_id, btn.dataset.status));
     });
@@ -889,6 +918,30 @@
       feedback.textContent = err.message;
     } finally {
       btn.disabled = false;
+    }
+  }
+
+  async function handleReopenDecision(publicId, requestId, approve) {
+    const reasonInput = document.getElementById('reopen-decision-reason-input');
+    const feedback = document.getElementById('reopen-decision-feedback');
+    const approveBtn = document.getElementById('reopen-approve-btn');
+    const rejectBtn = document.getElementById('reopen-reject-btn');
+
+    approveBtn.disabled = true;
+    rejectBtn.disabled = true;
+    feedback.className = 'action-feedback';
+    feedback.textContent = approve ? 'Approving\u2026' : 'Rejecting\u2026';
+    try {
+      await CivicSyncApi.decideReopenRequest(requestId, approve, reasonInput.value.trim());
+      feedback.className = 'action-feedback is-success';
+      feedback.textContent = approve ? 'Request approved; issue reopened.' : 'Request rejected.';
+      await openIssueDetail(publicId); // refresh modal with the real, post-decision state
+      refreshActiveListView();
+    } catch (err) {
+      feedback.className = 'action-feedback is-error';
+      feedback.textContent = err.message;
+      approveBtn.disabled = false;
+      rejectBtn.disabled = false;
     }
   }
 

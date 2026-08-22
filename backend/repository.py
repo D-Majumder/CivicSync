@@ -24,6 +24,8 @@ from backend.models import (
     IssueStatusHistory,
     Jurisdiction,
     JurisdictionLevel,
+    ReopenRequest,
+    ReopenRequestState,
     ResolutionEvidence,
 )
 from backend.transitions import validate_transition
@@ -291,6 +293,100 @@ def get_evidence_for_issue(db: Session, issue: Issue) -> list[ResolutionEvidence
         .order_by(ResolutionEvidence.uploaded_at.asc())
         .all()
     )
+
+
+# --- Citizen reopen requests (Milestone 18, Phase 5) --------------------------
+
+
+def get_pending_reopen_request(db: Session, issue: Issue) -> ReopenRequest | None:
+    """The issue's currently PENDING reopen request, if any -- at most
+    one may exist per issue (enforced in backend/service.py's
+    request_issue_reopen, which calls this to check before creating a
+    new one)."""
+    return (
+        db.query(ReopenRequest)
+        .filter(
+            ReopenRequest.issue_id == issue.id,
+            ReopenRequest.state == ReopenRequestState.PENDING,
+        )
+        .one_or_none()
+    )
+
+
+def get_reopen_request_by_public_id(db: Session, public_id: str) -> ReopenRequest | None:
+    """Fetch a single ReopenRequest by its public reference. Never
+    accepts or resolves a raw internal id from a caller."""
+    return db.query(ReopenRequest).filter(ReopenRequest.public_id == public_id).one_or_none()
+
+
+def create_reopen_request(db: Session, issue: Issue, citizen_reason: str) -> ReopenRequest:
+    """Persist a new PENDING reopen request. Does NOT touch Issue.status
+    at all -- a request is only ever a request; see
+    decide_reopen_request below for the actual (authority-gated) status
+    change on approval."""
+    request = ReopenRequest(issue_id=issue.id, citizen_reason=citizen_reason)
+    db.add(request)
+    db.commit()
+    db.refresh(request)
+    return request
+
+
+def decide_reopen_request(
+    db: Session,
+    request: ReopenRequest,
+    issue: Issue,
+    *,
+    approve: bool,
+    decision_reason: str | None,
+    decided_by: str,
+) -> ReopenRequest:
+    """Apply an authority's decision on a reopen request -- as ONE atomic
+    operation covering the request's own decision fields AND (on
+    approval only) the actual Issue status transition + its lifecycle
+    history entry.
+
+    On approval: reuses _apply_validated_status_transition (the exact
+    same primitive transition_issue_status/resolve_issue above use) to
+    move the issue from RESOLVED to REOPENED -- the existing, already
+    -valid RESOLVED -> REOPENED transition (see backend/transitions.py),
+    not a new parallel status system. Validated FIRST, before any
+    mutation, so a request against an issue that's no longer RESOLVED
+    (e.g. an authority already closed it through another path since the
+    request was filed) raises InvalidTransitionError with NOTHING
+    mutated -- not even the request's own state.
+
+    On rejection: the request's state is set to REJECTED and nothing
+    else changes -- the issue remains RESOLVED, and no lifecycle history
+    entry is created at all. Existing resolution_summary/resolved_by on
+    the Issue are left completely untouched in both outcomes -- this
+    function never clears them, preserving the original resolution for
+    auditability.
+
+    Raises InvalidTransitionError (only possible on approval) if the
+    issue is not currently RESOLVED. Raises SQLAlchemyError on
+    persistence failure; the caller (service layer) is responsible for
+    rolling back the session.
+    """
+    if approve:
+        # Checked first, before touching the request at all -- see
+        # resolve_issue's identical ordering rationale above.
+        validate_transition(issue.status, IssueStatus.REOPENED)
+        request.state = ReopenRequestState.APPROVED
+        request.decision_reason = decision_reason
+        request.decided_at = datetime.now(timezone.utc)
+        request.decided_by = decided_by
+        _apply_validated_status_transition(
+            db, issue, IssueStatus.REOPENED, reason=decision_reason or request.citizen_reason
+        )
+    else:
+        request.state = ReopenRequestState.REJECTED
+        request.decision_reason = decision_reason
+        request.decided_at = datetime.now(timezone.utc)
+        request.decided_by = decided_by
+
+    db.commit()
+    db.refresh(request)
+    return request
 
 
 def get_status_history(db: Session, issue: Issue) -> list[IssueStatusHistory]:

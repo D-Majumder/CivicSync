@@ -164,6 +164,18 @@ const CivicSyncApi = {
     return request(`/api/track/${encodeURIComponent(publicId)}`, { method: 'GET' });
   },
 
+  /**
+   * Citizen-facing: request reopening of a RESOLVED, tracked issue
+   * (Milestone 18, Phase 5). Creates a PENDING request for authority
+   * review -- never an immediate status change.
+   */
+  requestReopen(publicId, reason) {
+    return request(`/api/track/${encodeURIComponent(publicId)}/reopen-request`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  },
+
   /** Active department registry. */
   getDepartments() {
     return request('/api/departments', { method: 'GET' });
@@ -299,6 +311,19 @@ const CivicSyncApi = {
     return request(`/api/issues/${encodeURIComponent(publicId)}/evidence`, {
       method: 'POST',
       body: formData,
+    });
+  },
+
+  /**
+   * Authority-facing: approve or reject a citizen reopen request
+   * (Milestone 18, Phase 5). Approval transitions the issue via the
+   * existing lifecycle mechanism server-side -- this call itself never
+   * sets a status directly.
+   */
+  decideReopenRequest(requestPublicId, approve, decisionReason) {
+    return request(`/api/admin/reopen-requests/${encodeURIComponent(requestPublicId)}/decision`, {
+      method: 'POST',
+      body: JSON.stringify({ approve, decision_reason: decisionReason || null }),
     });
   },
 
