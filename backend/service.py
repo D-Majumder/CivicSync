@@ -23,6 +23,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from backend import evidence_storage
+from backend.hotspots import GeoIssuePoint, detect_hotspots
 
 from ai.client import (
     analyze_complaint,
@@ -56,6 +57,7 @@ from backend.repository import (
     get_jurisdictions_with_ancestry,
     get_operational_queue as repo_get_operational_queue,
     get_recent_activity,
+    get_geospatial_issues as repo_get_geospatial_issues,
     get_resolution_intelligence as repo_get_resolution_intelligence,
     get_resolution_timing_metrics,
     get_stale_issues as repo_get_stale_issues,
@@ -104,6 +106,9 @@ from backend.schemas import (
     RecentActivityEntry,
     RecentActivityResponse,
     CategoryReopenCount,
+    GeoIssueSummary,
+    HotspotResponse,
+    HotspotsResponse,
     ResolutionIntelligenceResponse,
     ResolutionTimingResponse,
     SeverityDistributionEntry,
@@ -805,6 +810,78 @@ def get_resolution_intelligence(
     )
 
 
+def get_geo_issues(
+    db: Session, *, jurisdiction_code: str | None = None
+) -> list[GeoIssueSummary] | None:
+    """Geo-tagged issues for the authority-facing map/list view
+    (Milestone 20). Returns None if jurisdiction_code doesn't match any
+    real jurisdiction (route -> 404)."""
+    issues = repo_get_geospatial_issues(db, jurisdiction_code=jurisdiction_code)
+    if issues is None:
+        return None
+    return [
+        GeoIssueSummary(
+            public_id=issue.public_id,
+            latitude=issue.latitude,
+            longitude=issue.longitude,
+            category=issue.category,
+            severity=issue.severity,
+            status=issue.status,
+            status_label=_status_label(issue.status),
+            created_at=issue.created_at,
+        )
+        for issue in issues
+    ]
+
+
+def get_civic_hotspots(
+    db: Session, *, jurisdiction_code: str | None = None
+) -> HotspotsResponse | None:
+    """Detect civic hotspots (Milestone 20) -- deterministic geographic
+    clustering (backend/hotspots.py) over active, geo-tagged issues in
+    scope. Never calls Gemini, never mutates any Issue. Returns None if
+    jurisdiction_code doesn't match any real jurisdiction (route -> 404).
+    """
+    issues = repo_get_geospatial_issues(db, jurisdiction_code=jurisdiction_code)
+    if issues is None:
+        return None
+
+    points = [
+        GeoIssuePoint(
+            public_id=issue.public_id,
+            latitude=issue.latitude,
+            longitude=issue.longitude,
+            category=issue.category.value,
+            severity=issue.severity.value,
+            status=_status_label(issue.status),
+            created_at=issue.created_at,
+        )
+        for issue in issues
+    ]
+    detected = detect_hotspots(points)
+
+    return HotspotsResponse(
+        hotspots=[
+            HotspotResponse(
+                center_latitude=round(h.center_latitude, 4),
+                center_longitude=round(h.center_longitude, 4),
+                complaint_count=h.complaint_count,
+                dominant_category=h.dominant_category,
+                category_breakdown=h.category_breakdown,
+                severity_breakdown=h.severity_breakdown,
+                status_breakdown=h.status_breakdown,
+                earliest_complaint_at=h.earliest_complaint_at,
+                latest_complaint_at=h.latest_complaint_at,
+                priority_signal=h.priority_signal,
+                member_public_ids=h.member_public_ids,
+            )
+            for h in detected
+        ],
+        geo_tagged_issue_count=len(points),
+        generated_at=datetime.now(timezone.utc),
+    )
+
+
 def get_recent_activity_feed(
     db: Session, limit: int = 20, *, jurisdiction_code: str | None = None
 ) -> RecentActivityResponse | None:
@@ -912,6 +989,15 @@ def get_civic_insights(
     )
     if reopened_insight is not None:
         insights.append(reopened_insight)
+
+    # Milestone 20: deterministic hotspot detection, wrapped as insights.
+    # Capped at the top 3 by complaint count to avoid insight-list bloat
+    # -- detect_hotspots() already returns them in that order.
+    hotspots_result = get_civic_hotspots(db, jurisdiction_code=jurisdiction_code)
+    if hotspots_result is None:
+        return None
+    for hotspot in hotspots_result.hotspots[:3]:
+        insights.append(insight_rules.build_hotspot_insight(hotspot))
 
     return InsightsResponse(insights=insights, generated_at=datetime.now(timezone.utc))
 

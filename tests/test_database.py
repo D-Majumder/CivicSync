@@ -69,6 +69,8 @@ def test_issues_table_exists_with_expected_columns(db_session):
         "location",
         "duration",
         "severity",
+        "latitude",
+        "longitude",
         "affected_population",
         "suggested_department",
         "confidence",

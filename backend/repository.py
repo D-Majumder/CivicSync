@@ -505,6 +505,43 @@ def get_resolution_intelligence(
     }
 
 
+# --- Geospatial civic intelligence (Milestone 20) -----------------------------
+
+
+def get_geospatial_issues(
+    db: Session, *, jurisdiction_code: str | None = None
+) -> list[Issue] | None:
+    """Active (non-terminal), geo-tagged issues within the last
+    HOTSPOT_TIME_WINDOW_DAYS -- the raw input for both the geographic
+    list view and hotspot detection (backend/hotspots.py).
+
+    Only issues with BOTH latitude and longitude set are returned --
+    never fabricated or geocoded. jurisdiction_code scopes to that
+    jurisdiction's subtree via Issue.jurisdiction_id, the same primitive
+    every other jurisdiction-aware analytics function in this module
+    uses; returns None if the code doesn't match any real jurisdiction
+    (caller maps that to 404).
+    """
+    from backend.hotspots import HOTSPOT_TIME_WINDOW_DAYS
+
+    subtree_ids = None
+    if jurisdiction_code is not None:
+        subtree_ids = get_jurisdiction_subtree_ids(db, jurisdiction_code)
+        if subtree_ids is None:
+            return None
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=HOTSPOT_TIME_WINDOW_DAYS)
+    query = (
+        db.query(Issue)
+        .filter(Issue.status.in_(OPERATIONAL_STATUSES))
+        .filter(Issue.latitude.isnot(None), Issue.longitude.isnot(None))
+        .filter(Issue.created_at >= cutoff)
+    )
+    if subtree_ids is not None:
+        query = query.filter(Issue.jurisdiction_id.in_(subtree_ids))
+    return query.order_by(Issue.public_id.asc()).all()
+
+
 def get_status_history(db: Session, issue: Issue) -> list[IssueStatusHistory]:
     """Return an Issue's status history, oldest first."""
     return (

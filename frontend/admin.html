@@ -104,6 +104,26 @@
           </div>
         </div>
 
+        <div class="card mb-sm" style="margin-bottom: var(--space-lg);">
+          <div class="card__header">
+            <h2 class="type-headline-sm">Civic Hotspots</h2>
+            <p class="type-body-sm text-muted" style="margin-top: 4px;">
+              Deterministic geographic clusters of nearby complaints — detected by location and recency, not by AI.
+            </p>
+          </div>
+          <div class="card__body">
+            <p class="type-body-sm" style="margin-bottom: 8px;">
+              <span id="hotspot-count">0</span> hotspot(s) detected
+              (<span id="hotspot-geo-tagged-count">0</span> geo-tagged issue(s) in scope)
+            </p>
+            <div id="hotspot-list"></div>
+            <p class="type-body-sm text-muted" id="hotspot-empty" hidden>
+              No hotspots detected. This requires issues with recorded coordinates, which no current citizen submission flow captures yet.
+            </p>
+            <p class="action-feedback is-error" id="hotspot-error" hidden></p>
+          </div>
+        </div>
+
         <div class="dashboard-grid-2col">
           <div class="card">
             <div class="card__header"><h2 class="type-headline-sm">Status Funnel</h2></div>

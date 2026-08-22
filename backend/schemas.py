@@ -516,6 +516,55 @@ class CategoryReopenCount(BaseModel):
     count: int
 
 
+class GeoIssueSummary(BaseModel):
+    """One geo-tagged issue for the authority-facing map/list view
+    (Milestone 20). Deliberately excludes the internal integer id,
+    original_text, and any other field beyond what a geographic overview
+    needs -- public_id is the only identifier ever exposed, and even
+    that is included only because it's already the established
+    public-safe reference used everywhere else in this API.
+    """
+
+    public_id: str
+    latitude: float
+    longitude: float
+    category: IssueCategory
+    severity: SeverityLevel
+    status: IssueStatus
+    status_label: str
+    created_at: UtcDatetime
+
+
+class HotspotResponse(BaseModel):
+    """One detected civic hotspot (Milestone 20) -- see
+    backend/hotspots.py's Hotspot for the deterministic detection logic
+    this is built from. Coordinates are the cluster's mean center,
+    rounded to 4 decimal places (roughly 11m precision) to avoid false
+    precision beyond what a handful of citizen-reported points can
+    actually support.
+    """
+
+    center_latitude: float
+    center_longitude: float
+    complaint_count: int
+    dominant_category: IssueCategory
+    category_breakdown: dict[str, int]
+    severity_breakdown: dict[str, int]
+    status_breakdown: dict[str, int]
+    earliest_complaint_at: UtcDatetime
+    latest_complaint_at: UtcDatetime
+    priority_signal: str
+    member_public_ids: list[str]
+
+
+class HotspotsResponse(BaseModel):
+    """Response for GET /api/admin/analytics/hotspots (Milestone 20)."""
+
+    hotspots: list[HotspotResponse]
+    geo_tagged_issue_count: int
+    generated_at: UtcDatetime
+
+
 class ResolutionIntelligenceResponse(BaseModel):
     """Resolution, reopening, and evidence-coverage KPIs for
     GET /api/admin/analytics/resolution-intelligence (Milestone 19).

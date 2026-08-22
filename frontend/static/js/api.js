@@ -272,6 +272,14 @@ const CivicSyncApi = {
     );
   },
 
+  /** Detected civic hotspots -- deterministic geographic clustering (Milestone 20). */
+  getHotspots(jurisdictionCode) {
+    return request(
+      `/api/admin/analytics/hotspots${toQueryString({ jurisdiction_code: jurisdictionCode || null })}`,
+      { method: 'GET' }
+    );
+  },
+
   /** Most recent status-transition events. */
   getRecentActivity(limit, jurisdictionCode) {
     return request(

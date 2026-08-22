@@ -62,6 +62,8 @@ from backend.schemas import (
     ReopenRequestCreate,
     ReopenRequestResponse,
     RecentActivityResponse,
+    GeoIssueSummary,
+    HotspotsResponse,
     ResolutionIntelligenceResponse,
     ResolutionTimingResponse,
     ResolveIssueRequest,
@@ -89,6 +91,8 @@ from backend.service import (
     decide_reopen_request,
     request_issue_reopen,
     get_recent_activity_feed,
+    get_civic_hotspots,
+    get_geo_issues,
     get_resolution_intelligence,
     get_resolution_timing,
     get_severity_distribution,
@@ -1187,6 +1191,67 @@ def read_resolution_intelligence(
     authority: str = Depends(get_current_authority),
 ) -> ResolutionIntelligenceResponse:
     result = get_resolution_intelligence(db, jurisdiction_code=jurisdiction_code)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Jurisdiction not found."
+        )
+    return result
+
+
+@app.get(
+    "/api/admin/analytics/hotspots",
+    response_model=HotspotsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="[INTERNAL/AUTHORITY] Detected civic hotspots",
+    description=(
+        "INTERNAL AUTHORITY API -- not authenticated yet. Deterministic "
+        "geographic clustering (Milestone 20) over active, geo-tagged issues "
+        "in scope -- membership is decided entirely by distance/count/time-"
+        "window logic (see backend/hotspots.py), never by Gemini. An "
+        "AI-generated explanation of an already-detected hotspot is available "
+        "via the existing GET /api/admin/insights and "
+        "POST /api/admin/insights/prioritize endpoints, which wrap each "
+        "hotspot as a regular Insight -- no separate hotspot-specific AI "
+        "endpoint exists. Coordinates require a geo-tagged issue "
+        "(issues.latitude/longitude) -- none are populated by any existing "
+        "citizen submission flow yet, so this returns an empty list until "
+        "that capture mechanism exists."
+    ),
+    responses={status.HTTP_404_NOT_FOUND: {"description": "Jurisdiction not found."}},
+)
+def read_hotspots(
+    jurisdiction_code: str | None = Query(default=None, description="Scope to this jurisdiction and its descendants."),
+    db: Session = Depends(get_db),
+    authority: str = Depends(get_current_authority),
+) -> HotspotsResponse:
+    result = get_civic_hotspots(db, jurisdiction_code=jurisdiction_code)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Jurisdiction not found."
+        )
+    return result
+
+
+@app.get(
+    "/api/admin/analytics/geo-issues",
+    response_model=list[GeoIssueSummary],
+    status_code=status.HTTP_200_OK,
+    summary="[INTERNAL/AUTHORITY] Geo-tagged issues (raw map/list data)",
+    description=(
+        "INTERNAL AUTHORITY API -- not authenticated yet. Raw geo-tagged "
+        "issue list (Milestone 20) backing the authority-facing map/list "
+        "view -- distinct from GET /api/admin/analytics/hotspots, which "
+        "returns detected CLUSTERS rather than individual issues. Never "
+        "exposes internal database ids."
+    ),
+    responses={status.HTTP_404_NOT_FOUND: {"description": "Jurisdiction not found."}},
+)
+def read_geo_issues(
+    jurisdiction_code: str | None = Query(default=None, description="Scope to this jurisdiction and its descendants."),
+    db: Session = Depends(get_db),
+    authority: str = Depends(get_current_authority),
+) -> list[GeoIssueSummary]:
+    result = get_geo_issues(db, jurisdiction_code=jurisdiction_code)
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Jurisdiction not found."

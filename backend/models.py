@@ -96,6 +96,14 @@ class Issue(Base):
     )
     problem: Mapped[str] = mapped_column(Text, nullable=False)
     location: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Structured coordinates (Milestone 20) -- independent of the free-text
+    # `location` field above (an AI-extracted description, e.g. "near the
+    # school"). Nullable: no citizen-facing capture flow exists yet for
+    # these, so every pre-existing issue has NULL here, and hotspot
+    # detection (backend/hotspots.py) simply excludes issues without both
+    # values set -- never fabricated or geocoded from the free-text field.
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     duration: Mapped[str | None] = mapped_column(String(255), nullable=True)
     severity: Mapped[SeverityLevel] = mapped_column(
         SAEnum(

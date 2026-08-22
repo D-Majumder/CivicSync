@@ -215,7 +215,7 @@
 
   async function loadDashboard() {
     showGlobalError(null);
-    const [summaryR, funnelR, severityR, workloadR, agingR, activityR, resolutionIntelR] = await Promise.allSettled([
+    const [summaryR, funnelR, severityR, workloadR, agingR, activityR, resolutionIntelR, hotspotsR] = await Promise.allSettled([
       CivicSyncApi.getDashboardSummary({ jurisdiction_code: state.currentJurisdictionCode || null }),
       CivicSyncApi.getFunnel(state.currentJurisdictionCode),
       CivicSyncApi.getSeverityDistribution(state.currentJurisdictionCode),
@@ -223,6 +223,7 @@
       CivicSyncApi.getAgingBuckets(state.currentJurisdictionCode),
       CivicSyncApi.getRecentActivity(10, state.currentJurisdictionCode),
       CivicSyncApi.getResolutionIntelligence(state.currentJurisdictionCode),
+      CivicSyncApi.getHotspots(state.currentJurisdictionCode),
     ]);
 
     if (summaryR.status === 'fulfilled') {
@@ -260,6 +261,46 @@
       ['kpi-resolution-rate', 'kpi-avg-resolution-time', 'kpi-reopen-rate', 'kpi-evidence-coverage', 'kpi-pending-reopens'].forEach(
         (id) => (document.getElementById(id).textContent = '\u2014')
       );
+    }
+
+    const hotspotError = document.getElementById('hotspot-error');
+    const hotspotEmpty = document.getElementById('hotspot-empty');
+    const hotspotList = document.getElementById('hotspot-list');
+    if (hotspotsR.status === 'fulfilled') {
+      hotspotError.hidden = true;
+      const data = hotspotsR.value;
+      document.getElementById('hotspot-count').textContent = data.hotspots.length;
+      document.getElementById('hotspot-geo-tagged-count').textContent = data.geo_tagged_issue_count;
+      if (data.hotspots.length === 0) {
+        hotspotList.innerHTML = '';
+        hotspotEmpty.hidden = false;
+      } else {
+        hotspotEmpty.hidden = true;
+        hotspotList.innerHTML = data.hotspots
+          .map((h) => {
+            const priorityClass = h.priority_signal === 'HIGH' ? 'sev-high' : 'sev-medium';
+            const earliest = CivicSyncUtils.formatTimestamp(h.earliest_complaint_at);
+            const latest = CivicSyncUtils.formatTimestamp(h.latest_complaint_at);
+            return `
+              <div class="history-row" style="align-items: flex-start;">
+                <span>
+                  <span class="chip ${priorityClass}">${CivicSyncUtils.escapeHtml(h.priority_signal)}</span>
+                  <strong>${CivicSyncUtils.escapeHtml(h.dominant_category)}</strong>
+                  \u2014 ${h.complaint_count} complaint(s) near (${h.center_latitude}, ${h.center_longitude})
+                  <br />
+                  <span class="type-body-sm text-muted">${earliest} \u2013 ${latest}</span>
+                </span>
+              </div>`;
+          })
+          .join('');
+      }
+    } else {
+      hotspotError.hidden = false;
+      hotspotError.textContent = 'Could not load civic hotspots: ' + hotspotsR.reason.message;
+      hotspotList.innerHTML = '';
+      hotspotEmpty.hidden = true;
+      document.getElementById('hotspot-count').textContent = '\u2014';
+      document.getElementById('hotspot-geo-tagged-count').textContent = '\u2014';
     }
 
     if (funnelR.status === 'fulfilled') {

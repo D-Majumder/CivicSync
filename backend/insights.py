@@ -197,6 +197,38 @@ def build_reopened_attention_insight(reopened_count: int) -> Insight | None:
     )
 
 
+def build_hotspot_insight(hotspot) -> Insight:
+    """Wrap an already-detected civic hotspot (backend/hotspots.py,
+    Milestone 20) as an Insight -- reuses the existing deterministic
+    insight infrastructure rather than creating a parallel AI/insight
+    system. Hotspot MEMBERSHIP was already decided entirely by
+    deterministic geometry before this function ever runs; this only
+    describes an existing, already-detected cluster in the same
+    structured shape every other insight uses, so it flows through the
+    EXISTING GET /api/admin/insights and POST /api/admin/insights/prioritize
+    (Gemini explanation/prioritization) endpoints with zero new AI code.
+    """
+    return Insight(
+        insight_type="civic_hotspot",
+        priority=InsightPriority.HIGH if hotspot.priority_signal == "HIGH" else InsightPriority.MEDIUM,
+        title=f"Complaint hotspot: {hotspot.dominant_category}",
+        summary=(
+            f"{hotspot.complaint_count} complaints cluster near "
+            f"({hotspot.center_latitude}, {hotspot.center_longitude}), "
+            f"predominantly {hotspot.dominant_category}."
+        ),
+        affected_issue_count=hotspot.complaint_count,
+        affected_department=None,
+        evidence={
+            "center_latitude": hotspot.center_latitude,
+            "center_longitude": hotspot.center_longitude,
+            "complaint_count": hotspot.complaint_count,
+            "dominant_category": hotspot.dominant_category,
+        },
+        recommended_action="Investigate this location for a shared root cause across the clustered complaints.",
+    )
+
+
 def build_recurring_category_insight(category_active_counts: dict[str, int]) -> Insight | None:
     """The single most common category among active issues, if it holds a
     large enough share of a large enough sample to be meaningful. Returns
