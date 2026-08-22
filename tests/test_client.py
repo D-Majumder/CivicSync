@@ -80,6 +80,40 @@ def test_analyze_complaint_uses_parsed_response(monkeypatch):
     assert kwargs["config"].response_schema is GeminiCivicIssueSchema
 
 
+def test_analyze_complaint_always_preserves_real_original_text(monkeypatch):
+    """Milestone 22 (critical safety fix): original_text in the returned
+    CivicIssue must always be exactly the real citizen_text argument,
+    NEVER whatever Gemini itself echoed back in its structured response
+    -- even if Gemini's echo subtly differs (a real risk for non-Latin
+    scripts, where an LLM asked to reproduce text is more likely to
+    introduce drift than for plain English). This test deliberately
+    mocks Gemini returning a DIFFERENT original_text than the real
+    input, and confirms the backend overwrites it."""
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key-for-testing")
+
+    real_citizen_text = "सड़क पर गड्ढा है, बहुत खतरनाक।"
+    gemini_echoed_text = "सड़क पर गड्ढे है, बहुत खतरनाक"  # subtly different from the real input
+
+    gemini_response_issue = CivicIssue(
+        original_text=gemini_echoed_text,
+        category=IssueCategory.ROADS_AND_POTHOLES,
+        problem="Dangerous pothole on the road.",
+        confidence=0.8,
+    )
+    mock_response = MagicMock()
+    mock_response.parsed = GeminiCivicIssueSchema(**gemini_response_issue.model_dump())
+    mock_response.text = gemini_response_issue.model_dump_json()
+
+    mock_client = MagicMock()
+    mock_client.models.generate_content.return_value = mock_response
+
+    with patch("ai.client.genai.Client", return_value=mock_client):
+        result = client_module.analyze_complaint(real_citizen_text)
+
+    assert result.original_text == real_citizen_text
+    assert result.original_text != gemini_echoed_text
+
+
 def test_analyze_complaint_falls_back_to_json_text(monkeypatch):
     """If `.parsed` isn't a CivicIssue, fall back to validating raw JSON text."""
     monkeypatch.setenv("GEMINI_API_KEY", "fake-key-for-testing")

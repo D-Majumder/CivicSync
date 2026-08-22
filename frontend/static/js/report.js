@@ -18,12 +18,14 @@
   const STAGE_ADVANCE_MS = 900;
   const MIN_ANALYSIS_DISPLAY_MS = 1400;
 
-  const STAGES = [
-    'Analyzing complaint',
-    'Classifying issue',
-    'Determining severity',
-    'Identifying department',
-  ];
+  function getStages() {
+    return [
+      window.CivicSyncI18n.t('analysis_stage_analyzing'),
+      window.CivicSyncI18n.t('analysis_stage_classifying'),
+      window.CivicSyncI18n.t('analysis_stage_severity'),
+      window.CivicSyncI18n.t('analysis_stage_department'),
+    ];
+  }
 
   // --- Element refs -----------------------------------------------------------
   const formStep = document.getElementById('step-form');
@@ -93,11 +95,11 @@
   function validateComplaint() {
     const value = complaintField.value.trim();
     if (value.length === 0) {
-      setFieldError('Please describe the issue before submitting.');
+      setFieldError(window.CivicSyncI18n.t('report_error_required'));
       return null;
     }
     if (value.length < MIN_COMPLAINT_LENGTH) {
-      setFieldError(`Please provide a bit more detail (at least ${MIN_COMPLAINT_LENGTH} characters).`);
+      setFieldError(window.CivicSyncI18n.t('report_error_too_short'));
       return null;
     }
     setFieldError(null);
@@ -124,7 +126,9 @@
 
   function setSubmitting(isSubmitting) {
     submitButton.disabled = isSubmitting;
-    submitButtonLabel.textContent = isSubmitting ? 'Submitting…' : 'Submit Report';
+    submitButtonLabel.textContent = isSubmitting
+      ? window.CivicSyncI18n.t('report_submitting_button')
+      : window.CivicSyncI18n.t('report_submit_button');
     submitButton.querySelector('.spinner')?.remove();
     if (isSubmitting) {
       const spinner = document.createElement('span');
@@ -137,7 +141,7 @@
 
   function renderStageList() {
     stageListEl.innerHTML = '';
-    STAGES.forEach((label) => {
+    getStages().forEach((label) => {
       const item = document.createElement('div');
       item.className = 'analysis-stage';
       item.innerHTML = `<span class="analysis-stage__marker">✓</span><span>${CivicSyncUtils.escapeHtml(label)}</span>`;
@@ -208,9 +212,8 @@
     resultPublicId.textContent = issue.public_id;
     resultDepartment.textContent = issue.assigned_department
       ? issue.assigned_department.name
-      : 'Not yet assigned \u2014 pending review';
-    const statusLabel = issue.status.charAt(0) + issue.status.slice(1).toLowerCase();
-    resultStatus.textContent = statusLabel.replace(/_/g, ' ');
+      : window.CivicSyncI18n.t('result_department_pending');
+    resultStatus.textContent = window.CivicSyncI18n.statusLabel(issue.status);
     trackButton.setAttribute('href', `/track/${encodeURIComponent(issue.public_id)}`);
   }
 
@@ -237,26 +240,26 @@
     locationAdjustWrap.hidden = false;
     const accuracyText =
       accuracyMeters != null ? ` (accuracy \u00b1${Math.round(accuracyMeters)}m)` : '';
-    setLocationStatus(`Location captured${accuracyText}. You can adjust it below if needed.`, false);
+    setLocationStatus(window.CivicSyncI18n.t('location_captured', { accuracy: accuracyText }), false);
   }
 
   useLocationButton.addEventListener('click', () => {
     if (!('geolocation' in navigator)) {
       setLocationStatus(
-        'Location is not supported by this browser. You can still submit your report.',
+        window.CivicSyncI18n.t('location_unsupported'),
         true
       );
       return;
     }
 
     useLocationButton.disabled = true;
-    useLocationButtonLabel.textContent = 'Locating\u2026';
-    setLocationStatus('Requesting your location\u2026', false);
+    useLocationButtonLabel.textContent = window.CivicSyncI18n.t('location_locating_button');
+    setLocationStatus(window.CivicSyncI18n.t('location_requesting'), false);
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
         useLocationButton.disabled = false;
-        useLocationButtonLabel.textContent = 'Use my current location';
+        useLocationButtonLabel.textContent = window.CivicSyncI18n.t('location_use_button');
         showCapturedLocation(
           position.coords.latitude,
           position.coords.longitude,
@@ -265,18 +268,18 @@
       },
       (error) => {
         useLocationButton.disabled = false;
-        useLocationButtonLabel.textContent = 'Use my current location';
+        useLocationButtonLabel.textContent = window.CivicSyncI18n.t('location_use_button');
         capturedLocation = null;
         // PERMISSION_DENIED = 1, POSITION_UNAVAILABLE = 2, TIMEOUT = 3 --
         // every case still leaves the complaint fully submit-able.
         if (error.code === error.PERMISSION_DENIED) {
           setLocationStatus(
-            'Location permission was denied. You can still submit your report without it.',
+            window.CivicSyncI18n.t('location_permission_denied'),
             true
           );
         } else {
           setLocationStatus(
-            'Location is currently unavailable. You can still submit your report without it.',
+            window.CivicSyncI18n.t('location_unavailable'),
             true
           );
         }
@@ -305,7 +308,7 @@
     locationLatInput.value = '';
     locationLngInput.value = '';
     locationAdjustWrap.hidden = true;
-    setLocationStatus('Location not captured. This is optional and never blocks submission.', false);
+    setLocationStatus(window.CivicSyncI18n.t('location_not_captured'), false);
   });
 
   // --- Submit handler ---------------------------------------------------------------
@@ -320,16 +323,15 @@
     setSubmitting(true);
     showStep(analysisStep);
     analysisOutcome.hidden = true;
-    analysisHeading.textContent = 'AI Analysis in Progress';
+    analysisHeading.textContent = window.CivicSyncI18n.t('analysis_heading');
     resetAnalysisIcon();
-    analysisCaption.textContent =
-      'CivicSync sends your report to Gemini in a single request \u2014 these stages show what that analysis covers.';
+    analysisCaption.textContent = window.CivicSyncI18n.t('analysis_caption');
 
     const animation = runStageAnimation();
     const startedAt = Date.now();
 
     try {
-      const issue = await CivicSyncApi.submitIssue(text, capturedLocation);
+      const issue = await CivicSyncApi.submitIssue(text, capturedLocation, window.CivicSyncI18n.getLanguage());
       const elapsed = Date.now() - startedAt;
       if (elapsed < MIN_ANALYSIS_DISPLAY_MS) {
         await wait(MIN_ANALYSIS_DISPLAY_MS - elapsed);

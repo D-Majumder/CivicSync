@@ -151,6 +151,7 @@ def test_submit_issue_response_includes_all_public_fields(client):
         "latitude",
         "longitude",
         "location_accuracy",
+        "citizen_language",
         "created_at",
         "updated_at",
         "resolved_at",

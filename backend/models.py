@@ -112,6 +112,15 @@ class Issue(Base):
     # doesn't report it. Independent of whether coordinates were
     # captured at all; always NULL if latitude/longitude are NULL.
     location_accuracy: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # The citizen's selected UI language at submission time (Milestone
+    # 22) -- "en", "hi", or "bn". This is the citizen's OWN language
+    # selector choice, never Gemini-detected -- a more honest,
+    # deterministic source of truth than asking the model to guess.
+    # Nullable: defaults to None for pre-existing issues and for any
+    # future caller that doesn't supply one; the citizen's
+    # original_text is never altered or retranslated based on this
+    # field, it exists purely for authority-side audit/analytics.
+    citizen_language: Mapped[str | None] = mapped_column(String(8), nullable=True)
     duration: Mapped[str | None] = mapped_column(String(255), nullable=True)
     severity: Mapped[SeverityLevel] = mapped_column(
         SAEnum(

@@ -72,6 +72,7 @@ def test_issues_table_exists_with_expected_columns(db_session):
         "latitude",
         "longitude",
         "location_accuracy",
+        "citizen_language",
         "affected_population",
         "suggested_department",
         "confidence",

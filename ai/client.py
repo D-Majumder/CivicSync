@@ -105,12 +105,21 @@ def analyze_complaint(citizen_text: str) -> CivicIssue:
     # directly would silently skip CivicIssue's stricter local guarantees.
     parsed = getattr(response, "parsed", None)
     if isinstance(parsed, GeminiCivicIssueSchema):
-        return CivicIssue.model_validate(parsed.model_dump())
+        civic_issue = CivicIssue.model_validate(parsed.model_dump())
+    else:
+        if not response.text:
+            raise ValueError("Gemini returned an empty response.")
+        civic_issue = CivicIssue.model_validate_json(response.text)
 
-    if not response.text:
-        raise ValueError("Gemini returned an empty response.")
-
-    return CivicIssue.model_validate_json(response.text)
+    # CRITICAL (Milestone 22): original_text must be preserved EXACTLY as
+    # the citizen submitted it -- never Gemini's own echo of it, which
+    # the model is asked to reproduce as part of its structured output
+    # but is not guaranteed to reproduce byte-for-byte, especially for
+    # non-Latin scripts (Hindi/Bengali) where subtle transcription drift
+    # is more likely than for plain English. Overwriting it here with the
+    # real input the backend actually received guarantees exact
+    # preservation regardless of anything Gemini does.
+    return civic_issue.model_copy(update={"original_text": citizen_text})
 
 
 def generate_insight_prioritization(insights: list[dict]) -> InsightPrioritizationOutput:

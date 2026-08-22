@@ -19,9 +19,14 @@
           <span>CivicSync</span>
         </a>
         <nav class="site-nav" aria-label="Primary">
-          <a href="/">Report Issue</a>
-          <a href="/track" aria-current="page">Track Status</a>
-          <a href="#" class="is-disabled" aria-disabled="true" title="Coming in a future milestone">Impact Map</a>
+          <a href="/" data-i18n="nav_report">Report Issue</a>
+          <a href="/track" aria-current="page" data-i18n="nav_track">Track Status</a>
+          <a href="#" class="is-disabled" aria-disabled="true" title="Coming in a future milestone" data-i18n="nav_impact_map">Impact Map</a>
+          <span class="language-switcher" aria-label="Language">
+            <button type="button" data-language-option="en">EN</button>
+            <button type="button" data-language-option="hi">हिं</button>
+            <button type="button" data-language-option="bn">বাং</button>
+          </span>
         </nav>
       </div>
     </header>
@@ -29,8 +34,8 @@
     <main class="page-main">
       <div class="container">
         <div class="hero" style="margin-bottom: var(--space-lg);">
-          <h1 class="type-headline-md">Track a Report</h1>
-          <p style="color: var(--color-on-surface-variant); margin-top: 8px;">
+          <h1 class="type-headline-md" data-i18n="track_heading">Track a Report</h1>
+          <p style="color: var(--color-on-surface-variant); margin-top: 8px;" data-i18n="track_subheading">
             Enter the public tracking ID you received when you submitted your report.
           </p>
         </div>
@@ -43,7 +48,7 @@
             autocomplete="off"
             spellcheck="false"
           />
-          <button type="submit" class="btn btn-primary">Track</button>
+          <button type="submit" class="btn btn-primary" data-i18n="track_button">Track</button>
         </form>
 
         <!-- Empty state: no id in the URL yet -->
@@ -117,56 +122,56 @@
           <div class="track-layout">
             <div>
               <div class="card" style="margin-bottom: var(--space-lg);">
-                <div class="card__header"><h2 class="type-headline-sm">Report Details</h2></div>
+                <div class="card__header"><h2 class="type-headline-sm" data-i18n="track_details_heading">Report Details</h2></div>
                 <div class="card__body">
                   <p id="track-problem" style="margin-bottom: 16px;"></p>
                   <dl class="track-meta-grid">
                     <div>
-                      <dt class="type-label">Location</dt>
+                      <dt class="type-label" data-i18n="track_location_label">Location</dt>
                       <dd id="track-location"></dd>
                     </div>
                     <div>
-                      <dt class="type-label">Duration</dt>
+                      <dt class="type-label" data-i18n="track_duration_label">Duration</dt>
                       <dd id="track-duration"></dd>
                     </div>
                     <div>
-                      <dt class="type-label">Affected Population</dt>
+                      <dt class="type-label" data-i18n="track_affected_population_label">Affected Population</dt>
                       <dd id="track-affected"></dd>
                     </div>
                     <div>
-                      <dt class="type-label">Severity</dt>
+                      <dt class="type-label" data-i18n="track_severity_label">Severity</dt>
                       <dd><span class="chip" id="track-severity-chip"></span></dd>
                     </div>
                     <div>
-                      <dt class="type-label">Assigned Department</dt>
+                      <dt class="type-label" data-i18n="track_department_label">Assigned Department</dt>
                       <dd id="track-department"></dd>
                     </div>
                     <div>
-                      <dt class="type-label">Reported</dt>
+                      <dt class="type-label" data-i18n="track_reported_label">Reported</dt>
                       <dd id="track-created-at"></dd>
                     </div>
                     <div>
-                      <dt class="type-label">Last Updated</dt>
+                      <dt class="type-label" data-i18n="track_updated_label">Last Updated</dt>
                       <dd id="track-updated-at"></dd>
                     </div>
                   </dl>
                   <div id="track-resolution" hidden style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--color-outline-variant);">
-                    <p class="type-label">Resolution</p>
+                    <p class="type-label" data-i18n="track_resolution_heading">Resolution</p>
                     <p id="track-resolution-note" style="margin-top: 4px;"></p>
                     <p class="type-body-sm" style="color: var(--color-on-surface-variant); margin-top: 4px;">Resolved <span id="track-resolved-at"></span></p>
                   </div>
                   <div id="track-evidence" hidden style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--color-outline-variant);">
-                    <p class="type-label">Resolution Evidence</p>
+                    <p class="type-label" data-i18n="track_evidence_heading">Resolution Evidence</p>
                     <ul id="track-evidence-list" style="list-style: none; padding: 0; margin: 8px 0 0;"></ul>
                   </div>
                   <div id="track-reopen-section" hidden style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--color-outline-variant);">
-                    <p class="type-label">Not satisfied with the resolution?</p>
+                    <p class="type-label" data-i18n="reopen_prompt">Not satisfied with the resolution?</p>
                     <div id="track-reopen-form-wrapper">
                       <p class="type-body-sm" style="color: var(--color-on-surface-variant); margin: 4px 0 8px;">
                         Submitting this sends a request to the authority for review \u2014 it does not reopen the issue immediately.
                       </p>
-                      <textarea id="track-reopen-reason" rows="3" style="width: 100%; box-sizing: border-box;" placeholder="Explain why the resolution was inadequate or the issue has returned\u2026"></textarea>
-                      <button class="btn btn-secondary mt-sm" id="track-reopen-submit-btn" type="button">Request Reopening</button>
+                      <textarea id="track-reopen-reason" rows="3" style="width: 100%; box-sizing: border-box;" placeholder="Explain why the resolution was inadequate or the issue has returned\u2026" data-i18n-placeholder="reopen_reason_placeholder"></textarea>
+                      <button class="btn btn-secondary mt-sm" id="track-reopen-submit-btn" type="button" data-i18n="reopen_submit_button">Request Reopening</button>
                       <p class="action-feedback" id="track-reopen-feedback"></p>
                     </div>
                     <div id="track-reopen-status" hidden>
@@ -178,7 +183,7 @@
             </div>
 
             <div class="card">
-              <div class="card__header"><h2 class="type-headline-sm">Timeline</h2></div>
+              <div class="card__header"><h2 class="type-headline-sm" data-i18n="track_timeline_heading">Timeline</h2></div>
               <div class="card__body">
                 <ul class="timeline" id="track-timeline"></ul>
               </div>
@@ -199,6 +204,7 @@
 
   <script src="/static/js/config.js"></script>
   <script src="/static/js/utils.js"></script>
+  <script src="/static/js/i18n.js"></script>
   <script src="/static/js/api.js"></script>
   <script src="/static/js/track.js"></script>
 </body>

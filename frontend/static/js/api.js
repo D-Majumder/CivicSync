@@ -157,8 +157,12 @@ const CivicSyncApi = {
    * represents the location of the REPORTED PROBLEM (captured via the
    * citizen's device geolocation, with their explicit action), not
    * necessarily the citizen's own location.
+   *
+   * `language` (Milestone 22) is the citizen's own UI language
+   * selection ("en"/"hi"/"bn") -- for authority-side audit only, never
+   * used to translate or alter the complaint text itself.
    */
-  submitIssue(text, location) {
+  submitIssue(text, location, language) {
     const body = { text };
     if (location && location.latitude != null && location.longitude != null) {
       body.latitude = location.latitude;
@@ -166,6 +170,9 @@ const CivicSyncApi = {
       if (location.accuracy != null) {
         body.accuracy = location.accuracy;
       }
+    }
+    if (language) {
+      body.language = language;
     }
     return request('/api/issues', {
       method: 'POST',

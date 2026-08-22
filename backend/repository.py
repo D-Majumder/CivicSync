@@ -96,6 +96,7 @@ def create_issue_from_civic_issue(
     latitude: float | None = None,
     longitude: float | None = None,
     location_accuracy: float | None = None,
+    citizen_language: str | None = None,
 ) -> Issue:
     """Persist a new Issue from a freshly AI-analyzed CivicIssue.
 
@@ -105,17 +106,14 @@ def create_issue_from_civic_issue(
     assigned_department are independent, both-required-eventually, but
     never-derived-from-each-other fields.
 
-    latitude/longitude/location_accuracy (Milestone 21) are entirely
-    OPTIONAL, keyword-only, and default to None -- every existing caller
-    of this function (and every existing test) continues to work
-    unchanged. These come from the CITIZEN's device geolocation capture,
-    NOT from Gemini -- deliberately kept as separate parameters rather
-    than folded into CivicIssue, preserving the same citizen-data-vs-
-    AI-extracted-data separation already established throughout this
-    project (see e.g. resolution_summary/resolved_by never being set
-    from AI output either). Range validation already happened at the
-    schema layer (backend/schemas.py's AnalyzeRequest) before this
-    function is ever called -- this function trusts its caller.
+    latitude/longitude/location_accuracy (Milestone 21) and
+    citizen_language (Milestone 22) are entirely OPTIONAL, keyword-only,
+    and default to None -- every existing caller of this function (and
+    every existing test) continues to work unchanged. These come from
+    the CITIZEN's device/UI selection, NOT from Gemini -- deliberately
+    kept as separate parameters rather than folded into CivicIssue,
+    preserving the same citizen-data-vs-AI-extracted-data separation
+    already established throughout this project.
 
     Only fields CivicIssue actually produces are populated here. Official/
     operational fields (assigned_department_id, resolution_summary,
@@ -143,6 +141,7 @@ def create_issue_from_civic_issue(
         latitude=latitude,
         longitude=longitude,
         location_accuracy=location_accuracy,
+        citizen_language=citizen_language,
     )
     db.add(issue)
     # Flush (not commit) so issue.id is assigned and available for the

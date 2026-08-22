@@ -54,6 +54,19 @@ Strict rules you must follow:
    0.0-1.0 scale. Low-information or ambiguous complaints should receive \
    a lower confidence score.
 
+8. Citizen text may be written in English, Hindi, or Bengali -- in the
+   Latin script, native script, or a mix (transliteration), and may
+   contain spelling mistakes, incomplete words, colloquial phrasing, or
+   minor grammatical errors. Read past these surface issues to extract
+   the underlying meaning, the same as you would for clean English text.
+   This tolerance is about READING the complaint, not about lowering the
+   bar in rules 1-3 above: an unclear or ambiguous complaint -- in any
+   language -- still gets unknown/null fields and a lower confidence
+   score, never a guessed or invented fact merely because the language
+   was hard to parse. Always populate category/severity from the SAME
+   fixed English-named sets regardless of the input language -- never
+   translate the category or severity names themselves.
+
 You will be given a response schema. Populate every required field. Use \
 null for optional fields you cannot support with evidence from the text.
 """
@@ -64,7 +77,12 @@ def build_user_prompt(citizen_text: str) -> str:
 
     Kept as a small function (rather than string formatting at the call
     site) so the wrapping format can be changed in one place if the prompt
-    needs to evolve.
+    needs to evolve. Deliberately does not translate or preprocess
+    citizen_text in any way -- Gemini receives the citizen's original
+    words exactly as submitted (English, Hindi, Bengali, or a mix), and
+    SYSTEM_PROMPT instructs it to read past spelling/grammar/script
+    issues rather than the prompt builder attempting to "clean up" the
+    text first.
     """
     return f"Citizen complaint:\n\"\"\"\n{citizen_text.strip()}\n\"\"\""
 

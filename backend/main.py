@@ -207,6 +207,7 @@ def submit_issue(request: AnalyzeRequest, db: Session = Depends(get_db)) -> Issu
             latitude=request.latitude,
             longitude=request.longitude,
             location_accuracy=request.accuracy,
+            citizen_language=request.language,
         )
     except ValueError as exc:
         raise HTTPException(

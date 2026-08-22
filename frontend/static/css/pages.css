@@ -332,3 +332,26 @@
 .evidence-link:hover {
   text-decoration: none;
 }
+
+/* Citizen-facing language switcher (Milestone 22) -- admin never loads
+   this stylesheet in a way that would show this control there. */
+.language-switcher {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 12px;
+}
+.language-switcher button {
+  background: transparent;
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-full);
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-on-surface-variant);
+  cursor: pointer;
+}
+.language-switcher button.is-active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #ffffff;
+}

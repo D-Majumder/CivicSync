@@ -19,9 +19,14 @@
           <span>CivicSync</span>
         </a>
         <nav class="site-nav" aria-label="Primary">
-          <a href="/" aria-current="page">Report Issue</a>
-          <a href="/track">Track Status</a>
-          <a href="#" class="is-disabled" aria-disabled="true" title="Coming in a future milestone">Impact Map</a>
+          <a href="/" aria-current="page" data-i18n="nav_report">Report Issue</a>
+          <a href="/track" data-i18n="nav_track">Track Status</a>
+          <a href="#" class="is-disabled" aria-disabled="true" title="Coming in a future milestone" data-i18n="nav_impact_map">Impact Map</a>
+          <span class="language-switcher" aria-label="Language">
+            <button type="button" data-language-option="en">EN</button>
+            <button type="button" data-language-option="hi">हिं</button>
+            <button type="button" data-language-option="bn">বাং</button>
+          </span>
         </nav>
       </div>
     </header>
@@ -43,7 +48,7 @@
           <div class="flow-grid">
             <div class="card">
               <div class="card__header">
-                <h2 class="type-headline-sm">Submit a Report</h2>
+                <h2 class="type-headline-sm" data-i18n="report_heading">Submit a Report</h2>
                 <p class="type-body-sm" style="color: var(--color-on-surface-variant); margin-top: 4px;">
                   Describe the issue in your own words — CivicSync's AI will classify it and route it
                   to the right department.
@@ -52,14 +57,15 @@
               <div class="card__body">
                 <form id="report-form" novalidate>
                   <div class="field" id="complaint-field-wrap">
-                    <label for="complaint-text">Describe the issue</label>
+                    <label for="complaint-text" data-i18n="report_field_label">Describe the issue</label>
                     <textarea
                       id="complaint-text"
                       name="text"
                       placeholder="e.g. There has been no street light near our school for two weeks."
+                      data-i18n-placeholder="report_field_placeholder"
                       required
                     ></textarea>
-                    <p class="field-hint">
+                    <p class="field-hint" data-i18n="report_field_hint">
                       Include what's wrong, where, and how long it's been going on — the more
                       detail you give, the better CivicSync's AI can classify and route it.
                     </p>
@@ -67,24 +73,24 @@
                   </div>
 
                   <div class="field" id="location-field-wrap">
-                    <label>Location of the problem <span class="field-hint" style="display:inline;">(optional)</span></label>
+                    <label><span data-i18n="location_label">Location of the problem</span> <span class="field-hint" style="display:inline;" data-i18n="location_optional">(optional)</span></label>
                     <button type="button" class="btn btn-secondary" id="use-location-button">
-                      <span id="use-location-button-label">Use my current location</span>
+                      <span id="use-location-button-label" data-i18n="location_use_button">Use my current location</span>
                     </button>
-                    <p class="field-hint" id="location-status" style="margin-top: 8px;">
+                    <p class="field-hint" id="location-status" style="margin-top: 8px;" data-i18n="location_not_captured">
                       Location not captured. This is optional and never blocks submission.
                     </p>
                     <div id="location-adjust-wrap" hidden style="margin-top: 8px; gap: 8px; flex-wrap: wrap;">
                       <div style="flex: 1 1 120px; min-width: 0;">
-                        <label for="location-lat-input" class="field-hint">Latitude</label>
+                        <label for="location-lat-input" class="field-hint" data-i18n="location_latitude">Latitude</label>
                         <input type="number" step="any" id="location-lat-input" min="-90" max="90" style="width: 100%; box-sizing: border-box;" />
                       </div>
                       <div style="flex: 1 1 120px; min-width: 0;">
-                        <label for="location-lng-input" class="field-hint">Longitude</label>
+                        <label for="location-lng-input" class="field-hint" data-i18n="location_longitude">Longitude</label>
                         <input type="number" step="any" id="location-lng-input" min="-180" max="180" style="width: 100%; box-sizing: border-box;" />
                       </div>
                       <div style="flex-basis: 100%;">
-                        <button type="button" class="btn btn-secondary" id="clear-location-button">Clear location</button>
+                        <button type="button" class="btn btn-secondary" id="clear-location-button" data-i18n="location_clear_button">Clear location</button>
                       </div>
                     </div>
                   </div>
@@ -92,7 +98,7 @@
                   <div id="form-notice" class="notice notice-error" hidden></div>
 
                   <button type="submit" class="btn btn-primary btn-block" id="submit-button">
-                    <span id="submit-button-label">Submit Report</span>
+                    <span id="submit-button-label" data-i18n="report_submit_button">Submit Report</span>
                   </button>
                 </form>
               </div>
@@ -126,7 +132,7 @@
             <div class="analysis-icon" id="analysis-icon">
               <span class="spinner spinner-dark"></span>
             </div>
-            <h1 class="type-headline-md" id="analysis-heading">AI Analysis in Progress</h1>
+            <h1 class="type-headline-md" id="analysis-heading" data-i18n="analysis_heading">AI Analysis in Progress</h1>
             <p class="analysis-caption" id="analysis-caption">
               CivicSync sends your report to Gemini in a single request.
             </p>
@@ -156,7 +162,7 @@
                 This is the AI's initial read — the department that officially picks up your
                 report may differ after human review.
               </p>
-              <button class="btn btn-primary" id="view-result-button" style="margin-top: 16px;">
+              <button class="btn btn-primary" id="view-result-button" style="margin-top: 16px;" data-i18n="analysis_view_result_button">
                 View My Report
               </button>
             </div>
@@ -194,8 +200,8 @@
             </div>
 
             <div class="result-actions">
-              <a href="#" class="btn btn-primary" id="track-button">Track Public Status</a>
-              <button class="btn btn-secondary" id="report-another-button">Report Another Issue</button>
+              <a href="#" class="btn btn-primary" id="track-button" data-i18n="result_track_button">Track Public Status</a>
+              <button class="btn btn-secondary" id="report-another-button" data-i18n="result_another_button">Report Another Issue</button>
             </div>
           </div>
         </section>
@@ -214,6 +220,7 @@
 
   <script src="/static/js/config.js"></script>
   <script src="/static/js/utils.js"></script>
+  <script src="/static/js/i18n.js"></script>
   <script src="/static/js/api.js"></script>
   <script src="/static/js/report.js"></script>
 </body>

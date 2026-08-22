@@ -58,12 +58,12 @@
   }
 
   function fillOptionalField(el, value) {
-    el.textContent = value ? value : 'Not specified';
+    el.textContent = value ? value : window.CivicSyncI18n.t('track_not_specified');
   }
 
   function renderIssue(issue) {
     elCategory.textContent = issue.category;
-    elStatusChip.textContent = issue.status_label;
+    elStatusChip.textContent = window.CivicSyncI18n.statusLabel(issue.status);
     elStatusChip.className = `chip ${CivicSyncUtils.statusChipClass(issue.status)}`;
     elPublicId.textContent = issue.public_id;
     elProblem.textContent = issue.problem;
@@ -74,7 +74,7 @@
     elSeverityChip.className = `chip ${CivicSyncUtils.severityChipClass(issue.severity)}`;
     elDepartment.textContent = issue.assigned_department
       ? issue.assigned_department.name
-      : 'Not yet assigned \u2014 pending review';
+      : window.CivicSyncI18n.t('track_department_pending');
     elCreatedAt.textContent = CivicSyncUtils.formatTimestamp(issue.created_at);
     elUpdatedAt.textContent = CivicSyncUtils.formatTimestamp(issue.updated_at);
 
@@ -85,7 +85,7 @@
       const li = document.createElement('li');
       li.className = `timeline__item${isCurrent ? ' timeline__item--current' : ''}`;
       li.innerHTML = `
-        <div class="timeline__status">${CivicSyncUtils.escapeHtml(entry.status)}</div>
+        <div class="timeline__status">${CivicSyncUtils.escapeHtml(window.CivicSyncI18n.statusLabel(entry.status))}</div>
         <div class="timeline__timestamp">${CivicSyncUtils.escapeHtml(CivicSyncUtils.formatTimestamp(entry.timestamp))}</div>
         ${entry.reason ? `<div class="timeline__reason">${CivicSyncUtils.escapeHtml(entry.reason)}</div>` : ''}
       `;
@@ -96,7 +96,7 @@
       elResolutionNote.textContent = issue.resolution_summary;
       elResolvedAt.textContent = issue.resolved_at
         ? CivicSyncUtils.formatTimestamp(issue.resolved_at)
-        : 'recently';
+        : window.CivicSyncI18n.t('track_resolved_prefix').toLowerCase();
       elResolution.hidden = false;
     } else {
       elResolution.hidden = true;
@@ -135,8 +135,7 @@
       if (issue.active_reopen_request) {
         elReopenFormWrapper.hidden = true;
         elReopenStatus.hidden = false;
-        elReopenStatusText.textContent =
-          'Your reopening request has been submitted and is pending authority review.';
+        elReopenStatusText.textContent = window.CivicSyncI18n.t('reopen_pending_message');
       } else {
         elReopenFormWrapper.hidden = false;
         elReopenStatus.hidden = true;
@@ -154,12 +153,12 @@
     const reason = elReopenReason.value.trim();
     if (reason.length < 3) {
       elReopenFeedback.className = 'action-feedback is-error';
-      elReopenFeedback.textContent = 'Please describe why the resolution was inadequate.';
+      elReopenFeedback.textContent = window.CivicSyncI18n.t('reopen_error_too_short');
       return;
     }
     elReopenSubmitBtn.disabled = true;
     elReopenFeedback.className = 'action-feedback';
-    elReopenFeedback.textContent = 'Submitting\u2026';
+    elReopenFeedback.textContent = window.CivicSyncI18n.t('report_submitting_button');
     try {
       await CivicSyncApi.requestReopen(publicId, reason);
       await loadIssue(publicId); // refresh with the real, post-submission pending state

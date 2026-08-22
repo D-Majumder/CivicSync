@@ -137,6 +137,7 @@ def submit_complaint(
     latitude: float | None = None,
     longitude: float | None = None,
     location_accuracy: float | None = None,
+    citizen_language: str | None = None,
 ) -> Issue:
     """Analyze citizen complaint text and persist the result as an Issue.
 
@@ -146,12 +147,15 @@ def submit_complaint(
     FIRST, before calling Gemini, so a misconfigured deployment fails
     fast without spending an AI call it would have to discard anyway.
 
-    latitude/longitude/location_accuracy (Milestone 21) are entirely
-    optional and default to None -- passed straight through to
-    create_issue_from_civic_issue, already range-validated at the schema
-    layer (backend/schemas.py's AnalyzeRequest) before this function is
-    ever called. Coordinates never affect jurisdiction resolution,
-    Gemini's analysis, or anything else in this function.
+    latitude/longitude/location_accuracy (Milestone 21) and
+    citizen_language (Milestone 22) are entirely optional and default to
+    None -- passed straight through to create_issue_from_civic_issue,
+    never affecting jurisdiction resolution or Gemini's analysis in any
+    way. citizen_language is the citizen's own UI selection, never sent
+    to Gemini as an instruction and never used to alter `text` itself --
+    Gemini is instructed (see ai/prompts.py's SYSTEM_PROMPT) to tolerate
+    English/Hindi/Bengali, spelling errors, and transliteration directly,
+    without any language hint or preprocessing from this function.
 
     Exceptions from get_default_jurisdiction_id or analyze_complaint
     (ValueError, EnvironmentError, google.genai.errors.APIError)
@@ -172,6 +176,7 @@ def submit_complaint(
             latitude=latitude,
             longitude=longitude,
             location_accuracy=location_accuracy,
+            citizen_language=citizen_language,
         )
     except SQLAlchemyError:
         db.rollback()
@@ -544,6 +549,7 @@ def get_admin_issue_detail(db: Session, public_id: str) -> AdminIssueDetailRespo
         latitude=issue.latitude,
         longitude=issue.longitude,
         location_accuracy=issue.location_accuracy,
+        citizen_language=issue.citizen_language,
         created_at=issue.created_at,
         updated_at=issue.updated_at,
         resolved_at=issue.resolved_at,

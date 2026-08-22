@@ -9,7 +9,7 @@ for POST /api/analyze (AI-only, not persisted).
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
 
@@ -85,6 +85,14 @@ class AnalyzeRequest(BaseModel):
         ge=0,
         description="Optional browser-reported GPS accuracy in meters, if the device supplied one.",
     )
+    language: Literal["en", "hi", "bn"] | None = Field(
+        default=None,
+        description=(
+            "Optional citizen-selected UI language at submission time (Milestone 22) -- "
+            "for authority-side audit only, never used to translate or alter the "
+            "citizen's original_text, and never sent to Gemini as an instruction."
+        ),
+    )
 
     @model_validator(mode="after")
     def _require_both_coordinates_or_neither(self) -> "AnalyzeRequest":
@@ -143,6 +151,7 @@ class IssueResponse(BaseModel):
     latitude: float | None
     longitude: float | None
     location_accuracy: float | None
+    citizen_language: str | None
     created_at: UtcDatetime
     updated_at: UtcDatetime
     resolved_at: UtcDatetime | None
@@ -535,6 +544,7 @@ class AdminIssueDetailResponse(BaseModel):
     latitude: float | None
     longitude: float | None
     location_accuracy: float | None
+    citizen_language: str | None
     created_at: UtcDatetime
     updated_at: UtcDatetime
     resolved_at: UtcDatetime | None
