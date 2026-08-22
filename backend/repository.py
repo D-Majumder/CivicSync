@@ -24,6 +24,7 @@ from backend.models import (
     IssueStatusHistory,
     Jurisdiction,
     JurisdictionLevel,
+    ResolutionEvidence,
 )
 from backend.transitions import validate_transition
 
@@ -236,6 +237,60 @@ def resolve_issue(db: Session, issue: Issue, resolution_note: str, resolved_by: 
     db.commit()
     db.refresh(issue)
     return issue
+
+
+# --- Resolution evidence (Milestone 18, Phase 3) -----------------------------
+
+
+def create_evidence(
+    db: Session,
+    issue: Issue,
+    *,
+    storage_key: str,
+    original_filename: str,
+    content_type: str,
+    size_bytes: int,
+    uploaded_by: str,
+) -> ResolutionEvidence:
+    """Persist one evidence row, committed on its own (independent of the
+    resolution note/status -- evidence upload is not itself a lifecycle
+    transition, see backend/service.py's upload_issue_evidence for the
+    full atomicity story, which saves the file BEFORE this call and
+    rolls back the saved file if this fails).
+    """
+    evidence = ResolutionEvidence(
+        issue_id=issue.id,
+        storage_key=storage_key,
+        original_filename=original_filename,
+        content_type=content_type,
+        size_bytes=size_bytes,
+        uploaded_by=uploaded_by,
+    )
+    db.add(evidence)
+    db.commit()
+    db.refresh(evidence)
+    return evidence
+
+
+def get_evidence_by_public_id(db: Session, public_id: str) -> ResolutionEvidence | None:
+    """Fetch a single ResolutionEvidence row by its public reference.
+    Never accepts or resolves a raw storage_key/path from a caller --
+    this is the only lookup path evidence retrieval uses."""
+    return (
+        db.query(ResolutionEvidence)
+        .filter(ResolutionEvidence.public_id == public_id)
+        .one_or_none()
+    )
+
+
+def get_evidence_for_issue(db: Session, issue: Issue) -> list[ResolutionEvidence]:
+    """All evidence for an issue, oldest upload first."""
+    return (
+        db.query(ResolutionEvidence)
+        .filter(ResolutionEvidence.issue_id == issue.id)
+        .order_by(ResolutionEvidence.uploaded_at.asc())
+        .all()
+    )
 
 
 def get_status_history(db: Session, issue: Issue) -> list[IssueStatusHistory]:

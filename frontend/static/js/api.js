@@ -47,9 +47,12 @@ function safeDetail(body, fallback) {
 
 async function request(path, options = {}) {
   let response;
+  const isFormData = options.body instanceof FormData;
   try {
     response = await fetch(apiBaseUrl() + path, {
-      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+      headers: isFormData
+        ? { ...(options.headers || {}) } // let the browser set Content-Type + boundary itself
+        : { 'Content-Type': 'application/json', ...(options.headers || {}) },
       ...options,
     });
   } catch (networkError) {
@@ -282,6 +285,20 @@ const CivicSyncApi = {
   explainIssue(publicId) {
     return request(`/api/admin/issues/${encodeURIComponent(publicId)}/explain`, {
       method: 'POST',
+    });
+  },
+
+  /**
+   * Upload one resolution evidence file (Milestone 18, Phase 3) --
+   * image/photo only. The server validates the actual file content, not
+   * just its declared type, and rejects anything unsupported/oversized.
+   */
+  uploadEvidence(publicId, file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return request(`/api/issues/${encodeURIComponent(publicId)}/evidence`, {
+      method: 'POST',
+      body: formData,
     });
   },
 

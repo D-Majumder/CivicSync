@@ -17,7 +17,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -199,9 +199,82 @@ class Issue(Base):
         order_by="IssueStatusHistory.changed_at",
         cascade="all, delete-orphan",
     )
+    # Resolution evidence (Milestone 18, Phase 3) -- zero or more
+    # authority-uploaded files (photos, primarily) documenting the actual
+    # work performed. Independent of the resolution note/resolved_by
+    # above: evidence can be attached at any point while an authority is
+    # working an issue, not only at the moment of resolution -- see
+    # ResolutionEvidence below.
+    evidence: Mapped[list["ResolutionEvidence"]] = relationship(
+        back_populates="issue",
+        order_by="ResolutionEvidence.uploaded_at",
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self) -> str:  # pragma: no cover - debugging convenience
         return f"<Issue public_id={self.public_id!r} status={self.status!r}>"
+
+
+EVIDENCE_PUBLIC_ID_PATTERN = r"^EVD-[0-9A-F]{12}$"
+
+
+def generate_evidence_public_id() -> str:
+    """A stable, non-sequential public reference for a ResolutionEvidence
+    row -- mirrors generate_public_id() above exactly (same shape, "EVD-"
+    prefix instead of "CIV-") so evidence references follow the same
+    "never expose the internal integer id" convention as every other
+    public-facing identifier in this project.
+    """
+    return f"EVD-{uuid.uuid4().hex[:12].upper()}"
+
+
+class ResolutionEvidence(Base):
+    """One authority-uploaded evidence file (a photo, primarily)
+    documenting the resolution of an Issue (Milestone 18, Phase 3).
+
+    Deliberately minimal metadata table, matching the storage boundary in
+    backend/evidence_storage.py: this row records WHAT was uploaded and
+    WHO/WHEN, never HOW the bytes are physically stored beyond the opaque
+    `storage_key` (a server-generated identifier, never a filesystem path
+    and never derived from the client-supplied filename -- see
+    backend/service.py's upload_issue_evidence for why that matters for
+    path-traversal safety).
+
+    `original_filename` is a sanitized DISPLAY name only -- it is never
+    used to construct a filesystem path or to look up the stored file.
+    """
+
+    __tablename__ = "resolution_evidence"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    public_id: Mapped[str] = mapped_column(
+        String(20), unique=True, index=True, nullable=False, default=generate_evidence_public_id
+    )
+    issue_id: Mapped[int] = mapped_column(ForeignKey("issues.id"), nullable=False, index=True)
+
+    # Server-generated (secrets.token_hex-based), never client input --
+    # the only thing ever passed to backend.evidence_storage.save()/load().
+    storage_key: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    # Sanitized DISPLAY name only (see class docstring) -- never used for
+    # filesystem access.
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Validated against a strict allowlist before this row is ever
+    # created -- see backend/service.py's ALLOWED_EVIDENCE_CONTENT_TYPES.
+    content_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # The authenticated authority identity that uploaded this file (see
+    # backend/auth.py's get_current_authority) -- never accepted from
+    # request input.
+    uploaded_by: Mapped[str] = mapped_column(String(255), nullable=False)
+    uploaded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+    issue: Mapped["Issue"] = relationship(back_populates="evidence")
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging convenience
+        return f"<ResolutionEvidence public_id={self.public_id!r} issue_id={self.issue_id!r}>"
 
 
 class IssueStatusHistory(Base):

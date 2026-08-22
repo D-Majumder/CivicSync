@@ -2,9 +2,9 @@ from pathlib import Path as FilePath
 from typing import Literal
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request, Response, status
+from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, Request, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from google.genai.errors import APIError
 from pydantic import BaseModel
@@ -48,6 +48,7 @@ from backend.schemas import (
     DepartmentResponse,
     DepartmentSummaryResponse,
     DepartmentWorkloadResponse,
+    EvidenceResponse,
     FunnelResponse,
     InsightsResponse,
     IssueExplanationResponse,
@@ -72,7 +73,9 @@ from backend.service import (
     get_dashboard_summary,
     get_department_summary,
     get_department_workload_summary,
+    get_evidence_file,
     get_issue_ai_explanation,
+    get_issue_evidence,
     get_jurisdiction_detail,
     get_operational_briefing,
     get_jurisdictions,
@@ -86,9 +89,11 @@ from backend.service import (
     list_operational_queue,
     list_stale_issues,
     resolve_issue,
+    upload_issue_evidence,
     submit_complaint,
     transition_issue,
 )
+from backend.service import EvidenceTooLargeError, UnsupportedEvidenceTypeError
 from backend.transitions import InvalidTransitionError
 
 # Load environment variables from .env before anything else (e.g. ai/client.py)
@@ -321,6 +326,123 @@ def resolve_issue_route(
             detail="Issue not found.",
         )
     return issue
+
+
+
+
+# ============================================================================
+# Resolution evidence (Milestone 18, Phase 3) -- INTERNAL/AUTHORITY, NOT
+# PUBLIC. Same caveat as the rest of this API: NOT authenticated by
+# anything beyond the existing get_current_authority session check.
+#
+# STORAGE: see backend/evidence_storage.py's module docstring for the
+# storage decision (local filesystem for this phase, NOT persistent on
+# Railway without an attached Volume). File bytes are never served from
+# a public static directory -- retrieval always goes through the
+# authenticated GET /api/evidence/{public_id}/file route below, which
+# looks the file up exclusively via its database row, never a
+# client-supplied path.
+# ============================================================================
+
+
+@app.post(
+    "/api/issues/{public_id}/evidence",
+    response_model=EvidenceResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="[INTERNAL/AUTHORITY] Upload resolution evidence",
+    description=(
+        "INTERNAL AUTHORITY API -- not authenticated yet. Uploads one "
+        "evidence file (JPEG/PNG/WebP only) for an issue. The actual "
+        "image bytes are verified server-side with Pillow -- a spoofed "
+        "Content-Type header or a non-image file renamed with an image "
+        "extension is rejected, not just checked against the filename. "
+        "Does not require any particular issue status -- evidence may "
+        "be attached at any point while an authority is working an "
+        "issue, independent of the Milestone 18 Phase 2 resolution "
+        "workflow, which this does not modify."
+    ),
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Issue not found."},
+        status.HTTP_400_BAD_REQUEST: {"description": "Unsupported or invalid image file."},
+        status.HTTP_413_CONTENT_TOO_LARGE: {"description": "File exceeds the maximum allowed size."},
+    },
+)
+async def upload_evidence_route(
+    public_id: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    authority: str = Depends(get_current_authority),
+) -> EvidenceResponse:
+    content = await file.read()
+    try:
+        evidence = upload_issue_evidence(
+            db,
+            public_id,
+            filename=file.filename or "evidence",
+            content_type=file.content_type or "",
+            content=content,
+            uploaded_by=authority,
+        )
+    except UnsupportedEvidenceTypeError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from None
+    except EvidenceTooLargeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail=str(exc)
+        ) from None
+    except SQLAlchemyError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to save evidence. Please try again.",
+        ) from None
+
+    if evidence is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found.")
+    return evidence
+
+
+@app.get(
+    "/api/issues/{public_id}/evidence",
+    response_model=list[EvidenceResponse],
+    status_code=status.HTTP_200_OK,
+    summary="[INTERNAL/AUTHORITY] List resolution evidence for an issue",
+    description="INTERNAL AUTHORITY API -- not authenticated yet. Metadata only -- never a filesystem path.",
+    responses={status.HTTP_404_NOT_FOUND: {"description": "Issue not found."}},
+)
+def list_evidence_route(
+    public_id: str, db: Session = Depends(get_db), authority: str = Depends(get_current_authority)
+) -> list[EvidenceResponse]:
+    evidence = get_issue_evidence(db, public_id)
+    if evidence is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found.")
+    return evidence
+
+
+@app.get(
+    "/api/evidence/{evidence_public_id}/file",
+    status_code=status.HTTP_200_OK,
+    summary="[INTERNAL/AUTHORITY] Retrieve an evidence file's bytes",
+    description=(
+        "INTERNAL AUTHORITY API -- not authenticated yet. Looks the file up "
+        "exclusively by its database row (found via evidence_public_id) -- "
+        "a caller can never supply or influence an actual filesystem path, "
+        "which is what prevents path traversal here."
+    ),
+    responses={status.HTTP_404_NOT_FOUND: {"description": "Evidence not found."}},
+)
+def get_evidence_file_route(
+    evidence_public_id: str,
+    db: Session = Depends(get_db),
+    authority: str = Depends(get_current_authority),
+) -> StreamingResponse:
+    result = get_evidence_file(db, evidence_public_id)
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found.")
+    content, content_type, display_filename = result
+    return StreamingResponse(
+        iter([content]),
+        media_type=content_type,
+        headers={"Content-Disposition": f'inline; filename="{display_filename}"'},
+    )
 
 
 @app.get(

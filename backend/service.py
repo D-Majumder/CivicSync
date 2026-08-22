@@ -12,11 +12,17 @@ this business logic isn't duplicated across handlers or tests. This is the
 
 from __future__ import annotations
 
+import os
+import secrets
 from datetime import datetime, timezone
+from io import BytesIO
 
 from google.genai.errors import APIError
+from PIL import Image, UnidentifiedImageError
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
+
+from backend import evidence_storage
 
 from ai.client import (
     analyze_complaint,
@@ -54,6 +60,9 @@ from backend.repository import (
     get_stale_issues as repo_get_stale_issues,
     get_status_history,
     list_issues_for_admin,
+    create_evidence,
+    get_evidence_by_public_id,
+    get_evidence_for_issue,
     resolve_issue as repo_resolve_issue,
     transition_issue_status,
 )
@@ -72,6 +81,7 @@ from backend.schemas import (
     DepartmentSummaryResponse,
     DepartmentWorkloadEntry,
     DepartmentWorkloadResponse,
+    EvidenceResponse,
     FunnelResponse,
     FunnelStage,
     Insight,
@@ -346,6 +356,17 @@ def get_admin_issue_detail(db: Session, public_id: str) -> AdminIssueDetailRespo
         )
         for entry in get_assignment_history(db, issue)
     ]
+    evidence = [
+        EvidenceResponse(
+            public_id=e.public_id,
+            original_filename=e.original_filename,
+            content_type=e.content_type,
+            size_bytes=e.size_bytes,
+            uploaded_by=e.uploaded_by,
+            uploaded_at=e.uploaded_at,
+        )
+        for e in issue.evidence
+    ]
 
     return AdminIssueDetailResponse(
         public_id=issue.public_id,
@@ -369,6 +390,7 @@ def get_admin_issue_detail(db: Session, public_id: str) -> AdminIssueDetailRespo
         closed_at=issue.closed_at,
         status_history=status_history,
         assignment_history=assignment_history,
+        evidence=evidence,
     )
 
 
@@ -962,3 +984,194 @@ def get_operational_briefing(
         considerations=ai_output.considerations,
         error=None,
     )
+
+
+# --- Resolution evidence (Milestone 18, Phase 3) -----------------------------
+
+# Maps an accepted Content-Type to its stored file extension and the exact
+# PIL format name Pillow reports for a genuine file of that type. Both the
+# declared Content-Type AND the actual decoded image format must match
+# something in this table -- neither is trusted alone. Limited to the
+# formats explicitly requested; nothing here accepts an extension just
+# because a filename claims it.
+_ALLOWED_EVIDENCE_TYPES: dict[str, tuple[str, str]] = {
+    "image/jpeg": (".jpg", "JPEG"),
+    "image/png": (".png", "PNG"),
+    "image/webp": (".webp", "WEBP"),
+}
+
+def _max_evidence_size_bytes() -> int:
+    """Read fresh on every call (not cached at import time) so
+    CIVICSYNC_EVIDENCE_MAX_SIZE_BYTES is genuinely configurable per
+    request/process, not frozen at whatever value happened to be set
+    when this module was first imported."""
+    return int(os.environ.get("CIVICSYNC_EVIDENCE_MAX_SIZE_BYTES", str(5 * 1024 * 1024)))
+
+
+class UnsupportedEvidenceTypeError(Exception):
+    """Raised when uploaded evidence isn't a genuine, supported image --
+    covers a rejected Content-Type, a Content-Type/actual-bytes mismatch,
+    an empty file, and corrupt/unparseable image data. The route maps
+    this to 400."""
+
+
+class EvidenceTooLargeError(Exception):
+    """Raised when uploaded evidence exceeds _MAX_EVIDENCE_SIZE_BYTES.
+    The route maps this to 413."""
+
+
+def _sanitize_evidence_display_filename(filename: str) -> str:
+    """A safe DISPLAY name only -- this value is never used to construct
+    a filesystem path or to look up a stored file (storage_key, a
+    server-generated random value, is what's actually used for that).
+    Strips any path component the client might have sent (defense in
+    depth against a filename like "../../etc/passwd") and any character
+    outside a conservative safe set.
+    """
+    base = os.path.basename((filename or "").strip()) or "evidence"
+    safe = "".join(ch for ch in base if ch.isalnum() or ch in "._- ")
+    safe = safe.strip() or "evidence"
+    return safe[:200]
+
+
+def _verify_genuine_image(content: bytes, declared_content_type: str) -> None:
+    """Confirm `content` is actually a valid, decodable image whose real
+    format matches declared_content_type -- never trusts the
+    Content-Type header (easily spoofed) or a filename extension alone.
+    Raises UnsupportedEvidenceTypeError if anything doesn't check out.
+    """
+    expected = _ALLOWED_EVIDENCE_TYPES.get(declared_content_type)
+    if expected is None:
+        raise UnsupportedEvidenceTypeError(
+            f"Unsupported content type: {declared_content_type!r}."
+        )
+    _extension, expected_format = expected
+
+    if not content:
+        raise UnsupportedEvidenceTypeError("Uploaded file is empty.")
+
+    try:
+        # A fast structural check first...
+        with Image.open(BytesIO(content)) as probe:
+            probe.verify()
+        # ...then a fresh, fully-decoding open (verify() leaves the
+        # image object unusable for further reads) to confirm the pixel
+        # data itself is genuinely decodable, not just a valid header.
+        with Image.open(BytesIO(content)) as image:
+            detected_format = image.format
+            image.load()
+    except (UnidentifiedImageError, OSError, ValueError):
+        raise UnsupportedEvidenceTypeError("File is not a valid image.") from None
+
+    if detected_format != expected_format:
+        raise UnsupportedEvidenceTypeError(
+            "The file's actual content does not match its declared content type."
+        )
+
+
+def upload_issue_evidence(
+    db: Session,
+    public_id: str,
+    *,
+    filename: str,
+    content_type: str,
+    content: bytes,
+    uploaded_by: str,
+) -> EvidenceResponse | None:
+    """Validate and store one resolution evidence file for an issue.
+
+    Returns None if no Issue matches public_id (route -> 404). Raises
+    UnsupportedEvidenceTypeError (route -> 400) or EvidenceTooLargeError
+    (route -> 413) if validation fails -- in either case, NOTHING is
+    written to storage or the database. `uploaded_by` must be the
+    server-side authenticated authority identity, never accepted from
+    request input.
+
+    Does not require the issue to be in any particular status -- an
+    authority may attach evidence at any point while working an issue,
+    not only at the exact moment of calling POST .../resolve (Milestone
+    18, Phase 2), which remains completely unchanged by this function.
+
+    Storage ordering for safety: the file is written to
+    backend.evidence_storage BEFORE the database row is created. If the
+    database write then fails, the orphaned file is best-effort cleaned
+    up before the error propagates -- this avoids ever creating a
+    database row that points at a file that was never actually written,
+    the more dangerous failure mode for later retrieval.
+    """
+    issue = get_issue_by_public_id(db, public_id)
+    if issue is None:
+        return None
+
+    max_size = _max_evidence_size_bytes()
+    if len(content) > max_size:
+        raise EvidenceTooLargeError(
+            f"Evidence file exceeds the maximum allowed size of {max_size} bytes."
+        )
+
+    _verify_genuine_image(content, content_type)
+
+    extension, _expected_format = _ALLOWED_EVIDENCE_TYPES[content_type]
+    # Server-generated, unguessable, and never derived from client input
+    # -- this is the ONLY value ever passed to evidence_storage, which is
+    # what makes path traversal via a crafted filename impossible.
+    storage_key = f"{secrets.token_hex(16)}{extension}"
+
+    evidence_storage.save(storage_key, content)
+    try:
+        evidence = create_evidence(
+            db,
+            issue,
+            storage_key=storage_key,
+            original_filename=_sanitize_evidence_display_filename(filename),
+            content_type=content_type,
+            size_bytes=len(content),
+            uploaded_by=uploaded_by,
+        )
+    except SQLAlchemyError:
+        db.rollback()
+        raise
+
+    return EvidenceResponse(
+        public_id=evidence.public_id,
+        original_filename=evidence.original_filename,
+        content_type=evidence.content_type,
+        size_bytes=evidence.size_bytes,
+        uploaded_by=evidence.uploaded_by,
+        uploaded_at=evidence.uploaded_at,
+    )
+
+
+def get_issue_evidence(db: Session, public_id: str) -> list[EvidenceResponse] | None:
+    """List evidence metadata for an issue. Returns None if no Issue
+    matches public_id (route -> 404)."""
+    issue = get_issue_by_public_id(db, public_id)
+    if issue is None:
+        return None
+    return [
+        EvidenceResponse(
+            public_id=e.public_id,
+            original_filename=e.original_filename,
+            content_type=e.content_type,
+            size_bytes=e.size_bytes,
+            uploaded_by=e.uploaded_by,
+            uploaded_at=e.uploaded_at,
+        )
+        for e in get_evidence_for_issue(db, issue)
+    ]
+
+
+def get_evidence_file(db: Session, evidence_public_id: str) -> tuple[bytes, str, str] | None:
+    """Retrieve one evidence file's bytes for download/display.
+
+    Returns (content_bytes, content_type, display_filename), or None if
+    no evidence matches evidence_public_id (route -> 404). Looks up the
+    file exclusively via the database row's own storage_key -- a caller
+    can never supply or influence a filesystem path directly, which is
+    what prevents path traversal here.
+    """
+    evidence = get_evidence_by_public_id(db, evidence_public_id)
+    if evidence is None:
+        return None
+    content = evidence_storage.load(evidence.storage_key)
+    return content, evidence.content_type, evidence.original_filename

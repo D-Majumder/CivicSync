@@ -674,6 +674,16 @@
       )
       .join('') || '<p class="text-muted type-body-sm">Not yet assigned.</p>';
 
+    const evidenceListHtml = detail.evidence
+      .map(
+        (e) => `
+        <div class="history-row">
+          <span><a href="/api/evidence/${encodeURIComponent(e.public_id)}/file" target="_blank" rel="noopener">${CivicSyncUtils.escapeHtml(e.original_filename)}</a> \u2014 ${CivicSyncUtils.escapeHtml(e.uploaded_by)}</span>
+          <span class="history-row__meta">${CivicSyncUtils.formatTimestamp(e.uploaded_at)}</span>
+        </div>`
+      )
+      .join('') || '<p class="text-muted type-body-sm">No evidence attached yet.</p>';
+
     const departmentOptions = state.departments
       .map((d) => `<option value="${CivicSyncUtils.escapeHtml(d.code)}">${CivicSyncUtils.escapeHtml(d.name)}</option>`)
       .join('');
@@ -758,6 +768,16 @@
       </div>
 
       <div class="detail-section">
+        <div class="detail-section-title"><h3 class="type-headline-sm" style="font-size:16px;">Resolution Evidence</h3></div>
+        <div class="history-list" id="evidence-list">${evidenceListHtml}</div>
+        <div class="action-row mt-sm">
+          <input type="file" id="evidence-file-input" accept="image/jpeg,image/png,image/webp" />
+          <button class="btn btn-secondary" id="evidence-upload-btn" type="button">Upload Evidence</button>
+        </div>
+        <div class="action-feedback" id="evidence-feedback"></div>
+      </div>
+
+      <div class="detail-section">
         <div class="detail-section-title"><h3 class="type-headline-sm" style="font-size:16px;">Status History</h3></div>
         <div class="history-list">${statusHistoryHtml}</div>
       </div>
@@ -769,6 +789,7 @@
     `;
 
     document.getElementById('assign-submit-btn').addEventListener('click', () => handleAssign(detail.public_id));
+    document.getElementById('evidence-upload-btn').addEventListener('click', () => handleEvidenceUpload(detail.public_id));
     modalBody.querySelectorAll('.transition-btn').forEach((btn) => {
       btn.addEventListener('click', () => handleTransition(detail.public_id, btn.dataset.status));
     });
@@ -834,6 +855,35 @@
       feedback.textContent = 'Assignment updated.';
       await openIssueDetail(publicId); // refresh modal with the real, post-assignment state
       refreshActiveListView();
+    } catch (err) {
+      feedback.className = 'action-feedback is-error';
+      feedback.textContent = err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function handleEvidenceUpload(publicId) {
+    const fileInput = document.getElementById('evidence-file-input');
+    const feedback = document.getElementById('evidence-feedback');
+    const btn = document.getElementById('evidence-upload-btn');
+
+    const file = fileInput.files[0];
+    if (!file) {
+      feedback.className = 'action-feedback is-error';
+      feedback.textContent = 'Choose an image file first.';
+      return;
+    }
+
+    btn.disabled = true;
+    feedback.className = 'action-feedback';
+    feedback.textContent = 'Uploading\u2026';
+    try {
+      await CivicSyncApi.uploadEvidence(publicId, file);
+      feedback.className = 'action-feedback is-success';
+      feedback.textContent = 'Evidence uploaded.';
+      fileInput.value = '';
+      await openIssueDetail(publicId); // refresh modal with the real, post-upload evidence list
     } catch (err) {
       feedback.className = 'action-feedback is-error';
       feedback.textContent = err.message;

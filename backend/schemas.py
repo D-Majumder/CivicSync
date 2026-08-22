@@ -352,6 +352,25 @@ class AdminAssignmentHistoryEntry(BaseModel):
     reason: str | None
 
 
+class EvidenceResponse(BaseModel):
+    """Metadata for one resolution evidence file (Milestone 18, Phase 3).
+
+    Deliberately excludes storage_key (an internal implementation detail
+    of where the file physically lives -- see backend/evidence_storage.py)
+    and the internal integer id/issue_id -- public_id is the only
+    identifier ever exposed, same convention as Issue.public_id. The
+    actual file bytes are retrieved separately via
+    GET /api/evidence/{public_id}/file, never a raw filesystem path.
+    """
+
+    public_id: str
+    original_filename: str
+    content_type: str
+    size_bytes: int
+    uploaded_by: str
+    uploaded_at: UtcDatetime
+
+
 class AdminIssueDetailResponse(BaseModel):
     """Full authority-facing detail for GET /api/admin/issues/{public_id}.
 
@@ -383,6 +402,7 @@ class AdminIssueDetailResponse(BaseModel):
     closed_at: UtcDatetime | None
     status_history: list[AdminStatusHistoryEntry]
     assignment_history: list[AdminAssignmentHistoryEntry]
+    evidence: list[EvidenceResponse]
 
 
 class DepartmentIssueCount(BaseModel):
