@@ -31,6 +31,11 @@
   const elCreatedAt = document.getElementById('track-created-at');
   const elUpdatedAt = document.getElementById('track-updated-at');
   const elTimeline = document.getElementById('track-timeline');
+  const elResolution = document.getElementById('track-resolution');
+  const elResolutionNote = document.getElementById('track-resolution-note');
+  const elResolvedAt = document.getElementById('track-resolved-at');
+  const elEvidence = document.getElementById('track-evidence');
+  const elEvidenceList = document.getElementById('track-evidence-list');
   const notFoundIdEl = document.getElementById('track-not-found-id');
   const errorMessageEl = document.getElementById('track-error-message');
 
@@ -79,6 +84,42 @@
       `;
       elTimeline.appendChild(li);
     });
+
+    if (issue.resolution_summary) {
+      elResolutionNote.textContent = issue.resolution_summary;
+      elResolvedAt.textContent = issue.resolved_at
+        ? CivicSyncUtils.formatTimestamp(issue.resolved_at)
+        : 'recently';
+      elResolution.hidden = false;
+    } else {
+      elResolution.hidden = true;
+    }
+
+    const evidence = issue.evidence || [];
+    if (evidence.length > 0) {
+      elEvidenceList.innerHTML = '';
+      evidence.forEach((item) => {
+        const li = document.createElement('li');
+        li.style.marginBottom = '6px';
+        const link = document.createElement('a');
+        link.href = `/api/track/${encodeURIComponent(issue.public_id)}/evidence/${encodeURIComponent(item.public_id)}/file`;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.className = 'evidence-link';
+        link.textContent = `\ud83d\udcce ${item.original_filename}`;
+        li.appendChild(link);
+        const meta = document.createElement('span');
+        meta.className = 'type-body-sm';
+        meta.style.color = 'var(--color-on-surface-variant)';
+        meta.style.marginLeft = '8px';
+        meta.textContent = CivicSyncUtils.formatTimestamp(item.uploaded_at);
+        li.appendChild(meta);
+        elEvidenceList.appendChild(li);
+      });
+      elEvidence.hidden = false;
+    } else {
+      elEvidence.hidden = true;
+    }
 
     showState(resultState);
   }

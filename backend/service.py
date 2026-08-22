@@ -92,6 +92,7 @@ from backend.schemas import (
     JurisdictionSummary,
     OperationalBriefingResponse,
     PrioritizedInsightsResponse,
+    PublicEvidenceSummary,
     PublicIssueTrackingResponse,
     PublicTimelineEntry,
     RecentActivityEntry,
@@ -255,6 +256,14 @@ def get_public_tracking(db: Session, public_id: str) -> PublicIssueTrackingRespo
     ]
 
     assigned_department = _department_summary(issue.assigned_department)
+    evidence = [
+        PublicEvidenceSummary(
+            public_id=e.public_id,
+            original_filename=e.original_filename,
+            uploaded_at=e.uploaded_at,
+        )
+        for e in get_evidence_for_issue(db, issue)
+    ]
 
     return PublicIssueTrackingResponse(
         public_id=issue.public_id,
@@ -269,7 +278,10 @@ def get_public_tracking(db: Session, public_id: str) -> PublicIssueTrackingRespo
         assigned_department=assigned_department,
         created_at=issue.created_at,
         updated_at=issue.updated_at,
+        resolution_summary=issue.resolution_summary,
+        resolved_at=issue.resolved_at,
         timeline=timeline,
+        evidence=evidence,
     )
 
 
@@ -1172,6 +1184,35 @@ def get_evidence_file(db: Session, evidence_public_id: str) -> tuple[bytes, str,
     """
     evidence = get_evidence_by_public_id(db, evidence_public_id)
     if evidence is None:
+        return None
+    content = evidence_storage.load(evidence.storage_key)
+    return content, evidence.content_type, evidence.original_filename
+
+
+def get_public_evidence_file(
+    db: Session, issue_public_id: str, evidence_public_id: str
+) -> tuple[bytes, str, str] | None:
+    """Citizen-facing evidence retrieval (Milestone 18, Phase 4) --
+    narrowly scoped to the existing public tracking model: a valid
+    evidence_public_id is NOT enough on its own. This also verifies that
+    evidence actually belongs to the issue identified by issue_public_id
+    (the same public_id the citizen is already tracking) before
+    returning anything. Without this check, a citizen who somehow
+    obtained or guessed a DIFFERENT issue's evidence_public_id could
+    retrieve evidence belonging to a report that isn't theirs -- exactly
+    the cross-issue access this function exists to prevent.
+
+    Returns None (route -> 404) if the issue doesn't exist, the evidence
+    doesn't exist, OR the evidence belongs to a different issue -- all
+    three cases are indistinguishable in the response, so this can't be
+    used to probe for the existence of evidence on an issue the caller
+    doesn't already know the public_id of.
+    """
+    issue = get_issue_by_public_id(db, issue_public_id)
+    if issue is None:
+        return None
+    evidence = get_evidence_by_public_id(db, evidence_public_id)
+    if evidence is None or evidence.issue_id != issue.id:
         return None
     content = evidence_storage.load(evidence.storage_key)
     return content, evidence.content_type, evidence.original_filename

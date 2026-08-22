@@ -291,10 +291,24 @@ def test_original_text_not_exposed(client):
     assert "original_text" not in body
 
 
-def test_resolution_summary_not_exposed(client):
+def test_resolution_summary_now_exposed_but_null_when_unresolved(client):
+    """Milestone 18, Phase 4: resolution_summary is now a citizen-visible
+    field (a citizen is entitled to know how their own report was
+    resolved) -- deliberately changed from earlier behavior. For a
+    freshly-submitted, unresolved issue it's present but null."""
     created = _submit_issue(client)
     body = client.get(f"/api/track/{created['public_id']}").json()
-    assert "resolution_summary" not in body
+    assert "resolution_summary" in body
+    assert body["resolution_summary"] is None
+
+
+def test_resolved_by_never_exposed_to_citizens(client):
+    """resolved_by (the resolving authority's identity) stays
+    authority-only -- the one resolution field deliberately NOT exposed
+    on the public tracking endpoint."""
+    created = _submit_issue(client)
+    body = client.get(f"/api/track/{created['public_id']}").json()
+    assert "resolved_by" not in body
 
 
 # --- 18: no Gemini call -------------------------------------------------------
@@ -434,7 +448,10 @@ def test_response_top_level_fields_are_exactly_the_approved_set(client):
         "assigned_department",
         "created_at",
         "updated_at",
+        "resolution_summary",
+        "resolved_at",
         "timeline",
+        "evidence",
     }
 
 

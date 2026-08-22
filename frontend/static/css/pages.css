@@ -320,3 +320,15 @@
     background-position: 0 50%;
   }
 }
+
+/* Resolution evidence links on the citizen tracking page (Milestone 18,
+   Phase 4) -- styled as clearly-tappable links, distinguishable from
+   ordinary tracking text at a glance. */
+.evidence-link {
+  color: var(--color-action);
+  font-weight: 600;
+  text-decoration: underline;
+}
+.evidence-link:hover {
+  text-decoration: none;
+}

@@ -418,8 +418,14 @@ def test_prioritize_excludes_internal_ids(client):
 def test_public_tracking_endpoint_unchanged_by_insights(client):
     issue = _submit_issue(client, severity=SeverityLevel.CRITICAL)
     body = client.get(f"/api/track/{issue['public_id']}").json()
+    # "evidence" intentionally excluded from this list: it's now a real,
+    # legitimate top-level field (Milestone 18 Phase 4's resolution
+    # evidence) -- an unrelated feature that happens to share the word
+    # with generic insight-supporting-evidence terminology. This test's
+    # actual intent (insight-specific fields don't leak into tracking)
+    # is unaffected by that coincidence.
     for forbidden in (
-        "insight_type", "insights", "ai_recommendation", "evidence",
+        "insight_type", "insights", "ai_recommendation",
         "recommended_action", "priority",
     ):
         assert forbidden not in body

@@ -80,6 +80,7 @@ from backend.service import (
     get_operational_briefing,
     get_jurisdictions,
     get_prioritized_insights,
+    get_public_evidence_file,
     get_public_tracking,
     get_recent_activity_feed,
     get_resolution_timing,
@@ -637,6 +638,39 @@ def track_issue(
             detail="No issue found with that tracking id.",
         )
     return tracking
+
+
+@app.get(
+    "/api/track/{public_id}/evidence/{evidence_public_id}/file",
+    status_code=status.HTTP_200_OK,
+    summary="Retrieve a resolution evidence file for a tracked issue (public)",
+    description=(
+        "Public, unauthenticated endpoint (Milestone 18, Phase 4) -- narrowly "
+        "scoped to the existing public tracking model: evidence_public_id "
+        "alone is not sufficient. The evidence must actually belong to the "
+        "issue identified by public_id (the same id the citizen is already "
+        "tracking), verified server-side before any file content is "
+        "returned. An id mismatch, a nonexistent issue, or nonexistent "
+        "evidence are all indistinguishable 404s."
+    ),
+    responses={status.HTTP_404_NOT_FOUND: {"description": "Evidence not found for this issue."}},
+)
+def get_public_evidence_file_route(
+    public_id: str = Path(..., pattern=PUBLIC_ID_PATTERN),
+    evidence_public_id: str = Path(...),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    result = get_public_evidence_file(db, public_id, evidence_public_id)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found for this issue."
+        )
+    content, content_type, display_filename = result
+    return StreamingResponse(
+        iter([content]),
+        media_type=content_type,
+        headers={"Content-Disposition": f'inline; filename="{display_filename}"'},
+    )
 
 
 # ============================================================================

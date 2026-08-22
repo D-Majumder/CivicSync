@@ -258,6 +258,25 @@ class PublicTimelineEntry(BaseModel):
     reason: str | None
 
 
+class PublicEvidenceSummary(BaseModel):
+    """Citizen-safe evidence metadata for GET /api/track/{public_id}
+    (Milestone 18, Phase 4).
+
+    Deliberately narrower than the authority-facing EvidenceResponse:
+    omits uploaded_by (the resolving authority's identity stays
+    authority-only, matching resolved_by's own treatment below) and
+    content_type/size_bytes (not needed by the public UI). The actual
+    file is retrieved separately via
+    GET /api/track/{public_id}/evidence/{evidence_public_id}/file, which
+    verifies the evidence belongs to that same publicly-tracked issue
+    before returning anything -- see backend.service.get_public_evidence_file.
+    """
+
+    public_id: str
+    original_filename: str
+    uploaded_at: UtcDatetime
+
+
 class PublicIssueTrackingResponse(BaseModel):
     """Public, citizen-safe tracking representation for
     GET /api/track/{public_id}.
@@ -265,11 +284,17 @@ class PublicIssueTrackingResponse(BaseModel):
     Deliberately a distinct model from IssueResponse, not a trimmed-down
     reuse of it: IssueResponse is the internal/admin representation and
     includes original_text, confidence, suggested_department, and
-    resolution_summary -- none of which belong on an unauthenticated
-    public endpoint. This model is always built explicitly (see
+    resolved_by -- none of which belong on an unauthenticated public
+    endpoint. This model is always built explicitly (see
     backend.service.get_public_tracking), never populated directly from
     an Issue ORM instance via from_attributes, so a future addition to
     Issue can never silently leak through here.
+
+    resolution_summary/resolved_at ARE exposed (Milestone 18, Phase 4) --
+    a citizen is entitled to know how and when their own report was
+    resolved. resolved_by is deliberately NOT exposed here -- the
+    resolving authority's identity stays authority-only, the same
+    treatment as every other internal-operations field this model omits.
     """
 
     public_id: str
@@ -286,7 +311,10 @@ class PublicIssueTrackingResponse(BaseModel):
     assigned_department: DepartmentSummary | None
     created_at: UtcDatetime
     updated_at: UtcDatetime
+    resolution_summary: str | None
+    resolved_at: UtcDatetime | None
     timeline: list[PublicTimelineEntry]
+    evidence: list[PublicEvidenceSummary]
 
 
 # --- Authority operations (Milestone 8) --------------------------------------
