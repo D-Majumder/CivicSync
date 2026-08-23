@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
 
 from ai.prompts import (
@@ -37,11 +38,21 @@ from ai.schemas import (
 # change core architecture without agreement").
 GEMINI_MODEL = "gemini-3.6-flash"
 
+# HTTP status codes treated as transient/retryable Gemini failures --
+# rate limiting (429) and server-side problems (5xx). Anything else
+# (400 invalid request, 401/403 auth, 404, safety-refusal-driven empty
+# responses, or any non-APIError exception like a schema ValidationError)
+# is NOT retried with the backup key, since a different key would not
+# fix a malformed request, a validation failure, or a safety refusal --
+# only a genuinely different, temporarily-unavailable backend would.
+_RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
+
 _client: genai.Client | None = None
+_backup_client: genai.Client | None = None
 
 
 def _get_client() -> genai.Client:
-    """Lazily create and cache the Gemini client.
+    """Lazily create and cache the primary Gemini client.
 
     Raises a clear, actionable error if GEMINI_API_KEY is not set, instead
     of letting the SDK fail with an opaque error later. The key itself is
@@ -63,6 +74,71 @@ def _get_client() -> genai.Client:
     return _client
 
 
+def _get_backup_client() -> genai.Client | None:
+    """Lazily create and cache the optional backup Gemini client.
+
+    Returns None (never raises) if GEMINI_API_KEY_BACKUP isn't
+    configured -- an absent backup key is not an error, it just means
+    no failover is available, and the existing single-key behavior
+    applies unchanged. The key itself is never logged or printed.
+    """
+    global _backup_client
+    if _backup_client is not None:
+        return _backup_client
+
+    api_key = os.environ.get("GEMINI_API_KEY_BACKUP")
+    if not api_key:
+        return None
+
+    _backup_client = genai.Client(api_key=api_key)
+    return _backup_client
+
+
+def _is_retryable_gemini_error(exc: Exception) -> bool:
+    """Whether a Gemini call failure is a transient, retryable problem
+    (rate limiting or a temporary service outage) as opposed to a
+    non-retryable one (invalid request, auth failure, safety refusal,
+    or a local validation/schema error) that failing over to a
+    different API key would not fix.
+    """
+    code = getattr(exc, "code", None)
+    return isinstance(exc, genai_errors.APIError) and code in _RETRYABLE_STATUS_CODES
+
+
+def _generate_content_with_failover(*, model: str, contents, config):
+    """Call Gemini's generate_content through the primary key, and --
+    only for a retryable failure (rate limit or temporary service
+    outage) with GEMINI_API_KEY_BACKUP configured -- retry exactly once
+    more through the backup key. At most 2 attempts total.
+
+    Every one of the 4 AI capabilities in this module (analyze_complaint,
+    generate_insight_prioritization, generate_issue_explanation,
+    generate_operational_briefing) calls this single centralized
+    function rather than the SDK directly, so the failover policy lives
+    in exactly one place. It changes nothing about the prompts, models,
+    schemas, or response handling of any of those 4 functions -- it only
+    decides which client makes the one underlying generate_content call.
+
+    A non-retryable error (bad request, auth failure, or any exception
+    that isn't a Gemini APIError with a retryable status code -- e.g. a
+    local ValueError from post-processing) is never retried and
+    propagates immediately, from whichever key raised it. If no backup
+    key is configured, a retryable primary failure also propagates
+    immediately -- this is the existing single-key behavior, preserved
+    exactly. Never logs, prints, or includes either API key's value.
+    """
+    primary_client = _get_client()
+    try:
+        return primary_client.models.generate_content(model=model, contents=contents, config=config)
+    except Exception as exc:
+        if not _is_retryable_gemini_error(exc):
+            raise
+        backup_client = _get_backup_client()
+        if backup_client is None:
+            raise
+        return backup_client.models.generate_content(model=model, contents=contents, config=config)
+
+
 def analyze_complaint(citizen_text: str) -> CivicIssue:
     """Convert raw citizen complaint text into a structured CivicIssue.
 
@@ -80,9 +156,7 @@ def analyze_complaint(citizen_text: str) -> CivicIssue:
     if not citizen_text or not citizen_text.strip():
         raise ValueError("citizen_text must be a non-empty string.")
 
-    client = _get_client()
-
-    response = client.models.generate_content(
+    response = _generate_content_with_failover(
         model=GEMINI_MODEL,
         contents=build_user_prompt(citizen_text),
         config=types.GenerateContentConfig(
@@ -152,9 +226,7 @@ def generate_insight_prioritization(insights: list[dict]) -> InsightPrioritizati
     if not insights:
         raise ValueError("insights must be a non-empty list.")
 
-    client = _get_client()
-
-    response = client.models.generate_content(
+    response = _generate_content_with_failover(
         model=GEMINI_MODEL,
         contents=build_prioritization_prompt(insights),
         config=types.GenerateContentConfig(
@@ -208,9 +280,7 @@ def generate_issue_explanation(issue_context: dict) -> IssueExplanationOutput:
     if not issue_context:
         raise ValueError("issue_context must not be empty.")
 
-    client = _get_client()
-
-    response = client.models.generate_content(
+    response = _generate_content_with_failover(
         model=GEMINI_MODEL,
         contents=build_explanation_prompt(issue_context),
         config=types.GenerateContentConfig(
@@ -266,9 +336,7 @@ def generate_operational_briefing(payload: dict) -> OperationalBriefingOutput:
     if not payload:
         raise ValueError("payload must not be empty.")
 
-    client = _get_client()
-
-    response = client.models.generate_content(
+    response = _generate_content_with_failover(
         model=GEMINI_MODEL,
         contents=build_operational_briefing_prompt(payload),
         config=types.GenerateContentConfig(
