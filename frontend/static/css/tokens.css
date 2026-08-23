@@ -42,7 +42,7 @@
 
   --color-success: #1e7a34;
   --color-success-container: #dcf5e3;
-  --color-warning: #9a6700;
+  --color-warning: #8d5e00; /* darkened from #9a6700 (M25.5) to pass WCAG AA 4.5:1 for chip text */
   --color-warning-container: #fff3d6;
 
   --color-background: #f8f9ff;

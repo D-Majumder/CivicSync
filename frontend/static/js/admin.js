@@ -718,6 +718,9 @@
   modalOverlay.addEventListener('click', (e) => {
     if (e.target === modalOverlay) closeModal();
   });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !modalOverlay.hidden) closeModal();
+  });
 
   async function openIssueDetail(publicId) {
     state.currentModalIssueId = publicId;

@@ -116,6 +116,7 @@
   font-size: var(--body-sm-size);
   font-weight: 600;
   padding: var(--space-sm) var(--space-md);
+  min-height: 44px;
   border-radius: var(--radius-default);
   border: 1px solid transparent;
   cursor: pointer;
@@ -444,6 +445,8 @@
   font-size: 18px;
   line-height: 1;
   padding: 6px 10px;
+  min-width: 44px;
+  min-height: 44px;
   cursor: pointer;
 }
 
