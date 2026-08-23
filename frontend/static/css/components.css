@@ -411,6 +411,39 @@
   gap: var(--space-lg);
 }
 
+.authority-sidebar__top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.authority-sidebar__collapsible {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  flex: 1;
+  min-height: 0;
+}
+
+/* Hidden on desktop -- the sidebar is always fully expanded there, so
+   there is nothing to toggle. */
+.mobile-nav-toggle {
+  display: none;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: var(--radius-default);
+  color: #ffffff;
+  font-size: 18px;
+  line-height: 1;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.mobile-nav-toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
 .authority-sidebar .brand {
   color: #ffffff;
 }
@@ -462,10 +495,28 @@
   }
   .authority-sidebar {
     width: 100%;
-    flex-direction: column;
-    align-items: stretch;
     padding: var(--space-sm) var(--space-md);
+    gap: 0;
+  }
+  .mobile-nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  /* Collapsed by default on mobile -- a citizen/authority visiting on a
+     phone sees a slim brand+menu-button bar, then the actual page
+     content immediately below it, NOT the full desktop sidebar stacked
+     on top (Milestone 25.3). The nav/jurisdiction/logout panel becomes
+     an expandable drawer instead. */
+  .authority-sidebar__collapsible {
+    display: none;
     gap: var(--space-sm);
+    margin-top: var(--space-sm);
+    padding-top: var(--space-sm);
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+  }
+  .authority-sidebar.is-nav-open .authority-sidebar__collapsible {
+    display: flex;
   }
   .authority-nav {
     flex-direction: row;

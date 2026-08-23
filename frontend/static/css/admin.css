@@ -125,6 +125,18 @@
   background: var(--color-surface-container-low);
 }
 
+/* Severity-scannable rows (Milestone 25.3): a slim left-edge accent on
+   the first cell, so an authority can gauge urgency down the whole
+   queue without reading every severity chip individually. Reuses the
+   exact colors already established for severity elsewhere on this
+   page (.bar-viz__fill.sev-*) -- no new colors introduced. */
+.data-table tbody tr[data-severity='Critical'] td:first-child { border-left: 3px solid #ba1a1a; }
+.data-table tbody tr[data-severity='High'] td:first-child { border-left: 3px solid #c25a00; }
+.data-table tbody tr[data-severity='Medium'] td:first-child { border-left: 3px solid #9a6700; }
+.data-table tbody tr[data-severity='Low'] td:first-child { border-left: 3px solid #1e7a34; }
+.data-table tbody tr[data-severity='Unknown'] td:first-child { border-left: 3px solid var(--color-outline); }
+.data-table tbody tr td:first-child { border-left: 3px solid transparent; }
+
 .data-table .cell-id {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -394,6 +406,15 @@
   margin-bottom: var(--space-lg);
 }
 
+/* Milestone 25.3: a subtle divider between consecutive modal sections
+   (not before the first one) for clearer visual separation -- pure
+   presentation, no IDs/classes touched, so every existing button and
+   action handler is completely unaffected. */
+.detail-section + .detail-section {
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--color-card-header-border);
+}
+
 .detail-section-title {
   display: flex;
   align-items: center;
@@ -541,6 +562,21 @@
   .dashboard-grid-2col {
     grid-template-columns: 1fr 1fr;
   }
+}
+
+/* Dashboard section grouping labels (Milestone 25.3) -- separates the
+   dashboard into scannable tiers (Operational Intelligence / Issue
+   Breakdown / Activity) without adding any new data or functionality. */
+.dashboard-section-label {
+  font-size: var(--label-md-size);
+  font-weight: var(--label-md-weight);
+  letter-spacing: var(--label-md-tracking);
+  text-transform: uppercase;
+  color: var(--color-on-surface-variant);
+  margin: var(--space-xl) 0 var(--space-sm);
+}
+.dashboard-section-label:first-of-type {
+  margin-top: 0;
 }
 
 @media (max-width: 640px) {

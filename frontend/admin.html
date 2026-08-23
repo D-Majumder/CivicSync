@@ -13,33 +13,45 @@
 <body>
   <div class="authority-shell">
     <aside class="authority-sidebar">
-      <a href="/" class="brand">
-        <img src="/static/assets/logo.png" alt="CivicSync" />
-        <span>CivicSync</span>
-      </a>
-
-      <!-- Milestone 13: real jurisdiction context, backed by GET
-           /api/jurisdictions -- never decorative/fabricated. If no
-           LOCAL_BODY jurisdiction exists yet, this is hidden rather than
-           showing a fake placeholder chain. -->
-      <div id="jurisdiction-context" hidden>
-        <p class="type-label" style="color: #8b96ab; margin-bottom: 4px;">Current Jurisdiction</p>
-        <p class="type-body-sm" id="jurisdiction-breadcrumb" style="color: #dbe4f5;"></p>
+      <div class="authority-sidebar__top-row">
+        <a href="/" class="brand">
+          <img src="/static/assets/logo.png" alt="CivicSync" />
+          <span>CivicSync</span>
+        </a>
+        <button
+          type="button"
+          class="mobile-nav-toggle"
+          id="mobile-nav-toggle"
+          aria-label="Menu"
+          aria-expanded="false"
+          aria-controls="authority-sidebar-collapsible"
+        >☰</button>
       </div>
 
-      <nav class="authority-nav" aria-label="Authority" id="authority-nav">
-        <a href="#dashboard" data-view="dashboard" class="active">Dashboard</a>
-        <a href="#queue" data-view="queue">Issue Queue</a>
-        <a href="#issues" data-view="issues">All Issues</a>
-        <a href="#stale" data-view="stale">Stale Issues</a>
-        <a href="#departments" data-view="departments">Departments</a>
-        <a href="#intelligence" data-view="intelligence">Civic Intelligence</a>
-      </nav>
-      <div style="margin-top: auto;">
-        <p class="type-body-sm" style="color: #8b96ab; margin-bottom: var(--space-sm);">
-          Internal authority prototype. Session expires after 8 hours of inactivity.
-        </p>
-        <button class="btn btn-secondary" id="logout-button" type="button" style="width: 100%;">Log Out</button>
+      <div class="authority-sidebar__collapsible" id="authority-sidebar-collapsible">
+        <!-- Milestone 13: real jurisdiction context, backed by GET
+             /api/jurisdictions -- never decorative/fabricated. If no
+             LOCAL_BODY jurisdiction exists yet, this is hidden rather than
+             showing a fake placeholder chain. -->
+        <div id="jurisdiction-context" hidden>
+          <p class="type-label" style="color: #8b96ab; margin-bottom: 4px;">Current Jurisdiction</p>
+          <p class="type-body-sm" id="jurisdiction-breadcrumb" style="color: #dbe4f5;"></p>
+        </div>
+
+        <nav class="authority-nav" aria-label="Authority" id="authority-nav">
+          <a href="#dashboard" data-view="dashboard" class="active">Dashboard</a>
+          <a href="#queue" data-view="queue">Issue Queue</a>
+          <a href="#issues" data-view="issues">All Issues</a>
+          <a href="#stale" data-view="stale">Stale Issues</a>
+          <a href="#departments" data-view="departments">Departments</a>
+          <a href="#intelligence" data-view="intelligence">Civic Intelligence</a>
+        </nav>
+        <div style="margin-top: auto;">
+          <p class="type-body-sm" style="color: #8b96ab; margin-bottom: var(--space-sm);">
+            Internal authority prototype. Session expires after 8 hours of inactivity.
+          </p>
+          <button class="btn btn-secondary" id="logout-button" type="button" style="width: 100%;">Log Out</button>
+        </div>
       </div>
     </aside>
 
@@ -75,6 +87,7 @@
           </div>
         </div>
 
+        <h2 class="dashboard-section-label">Operational Intelligence</h2>
         <div class="card mb-sm" style="margin-bottom: var(--space-lg);">
           <div class="card__header"><h2 class="type-headline-sm">Resolution &amp; Reopening</h2></div>
           <div class="card__body">
@@ -124,6 +137,7 @@
           </div>
         </div>
 
+        <h2 class="dashboard-section-label">Issue Breakdown</h2>
         <div class="dashboard-grid-2col">
           <div class="card">
             <div class="card__header"><h2 class="type-headline-sm">Status Funnel</h2></div>
@@ -155,6 +169,7 @@
           </div>
         </div>
 
+        <h2 class="dashboard-section-label">Activity</h2>
         <div class="card">
           <div class="card__header"><h2 class="type-headline-sm">Recent Activity</h2></div>
           <div class="card__body">

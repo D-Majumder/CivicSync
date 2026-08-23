@@ -92,6 +92,29 @@
     globalError.textContent = message;
   }
 
+  // --- Mobile nav toggle (Milestone 25.3) ---------------------------------------
+  // Desktop: the toggle button is display:none via CSS and the sidebar's
+  // collapsible section is always visible -- this code has no visible
+  // effect there. Mobile: the sidebar starts collapsed to a slim brand
+  // bar; tapping the toggle reveals the nav/jurisdiction/logout panel as
+  // a drawer, matching the existing dark sidebar styling rather than
+  // stacking the entire desktop sidebar above page content.
+  const mobileNavToggle = document.getElementById('mobile-nav-toggle');
+  const authoritySidebar = document.querySelector('.authority-sidebar');
+
+  function closeMobileNav() {
+    if (!authoritySidebar) return;
+    authoritySidebar.classList.remove('is-nav-open');
+    if (mobileNavToggle) mobileNavToggle.setAttribute('aria-expanded', 'false');
+  }
+
+  if (mobileNavToggle && authoritySidebar) {
+    mobileNavToggle.addEventListener('click', () => {
+      const isOpen = authoritySidebar.classList.toggle('is-nav-open');
+      mobileNavToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    });
+  }
+
   // --- View routing ------------------------------------------------------------------
 
   function setActiveView(viewName) {
@@ -115,6 +138,7 @@
     a.addEventListener('click', (e) => {
       e.preventDefault();
       window.location.hash = a.dataset.view;
+      closeMobileNav();
     });
   });
   window.addEventListener('hashchange', () => {
@@ -148,7 +172,7 @@
   function issueRowHtml(item) {
     const deptName = item.assigned_department ? item.assigned_department.name : '\u2014 Unassigned';
     return `
-      <tr class="is-clickable" data-public-id="${CivicSyncUtils.escapeHtml(item.public_id)}">
+      <tr class="is-clickable" data-public-id="${CivicSyncUtils.escapeHtml(item.public_id)}" data-severity="${CivicSyncUtils.escapeHtml(item.severity)}">
         <td class="cell-id">${CivicSyncUtils.escapeHtml(item.public_id)}</td>
         <td>${CivicSyncUtils.escapeHtml(item.category)}</td>
         <td><span class="chip ${CivicSyncUtils.severityChipClass(item.severity)}">${CivicSyncUtils.escapeHtml(item.severity)}</span></td>
