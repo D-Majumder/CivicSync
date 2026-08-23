@@ -360,32 +360,27 @@ def decide_reopen_request(
     decision_reason: str | None,
     decided_by: str,
 ) -> ReopenRequest:
-    """Apply an authority's decision on a reopen request -- as ONE atomic
-    operation covering the request's own decision fields AND (on
-    approval only) the actual Issue status transition + its lifecycle
-    history entry.
+    """Apply an authority's decision on a reopen request, as one atomic
+    operation covering the request's own decision fields and, on
+    approval, the Issue status transition plus its history entry.
 
-    On approval: reuses _apply_validated_status_transition (the exact
-    same primitive transition_issue_status/resolve_issue above use) to
-    move the issue from RESOLVED to REOPENED -- the existing, already
-    -valid RESOLVED -> REOPENED transition (see backend/transitions.py),
-    not a new parallel status system. Validated FIRST, before any
-    mutation, so a request against an issue that's no longer RESOLVED
-    (e.g. an authority already closed it through another path since the
-    request was filed) raises InvalidTransitionError with NOTHING
-    mutated -- not even the request's own state.
+    On approval: reuses _apply_validated_status_transition (the same
+    primitive transition_issue_status/resolve_issue use) to move the
+    issue from RESOLVED to REOPENED -- an existing, already-valid
+    transition (see backend/transitions.py), not a parallel status
+    system. Validated first, before any mutation, so a request against
+    an issue no longer RESOLVED (e.g. closed through another path since
+    the request was filed) raises InvalidTransitionError with nothing
+    mutated, not even the request's own state.
 
-    On rejection: the request's state is set to REJECTED and nothing
-    else changes -- the issue remains RESOLVED, and no lifecycle history
-    entry is created at all. Existing resolution_summary/resolved_by on
-    the Issue are left completely untouched in both outcomes -- this
-    function never clears them, preserving the original resolution for
-    auditability.
+    On rejection: only the request's state becomes REJECTED -- the issue
+    remains RESOLVED, no history entry is created. resolution_summary/
+    resolved_by on the Issue are never cleared in either outcome,
+    preserving the original resolution for auditability.
 
-    Raises InvalidTransitionError (only possible on approval) if the
-    issue is not currently RESOLVED. Raises SQLAlchemyError on
-    persistence failure; the caller (service layer) is responsible for
-    rolling back the session.
+    Raises InvalidTransitionError (approval only) if the issue isn't
+    currently RESOLVED. Raises SQLAlchemyError on persistence failure;
+    the caller is responsible for rolling back the session.
     """
     if approve:
         # Checked first, before touching the request at all -- see

@@ -1155,35 +1155,29 @@ def get_jurisdiction_detail(db: Session, code: str) -> JurisdictionResponse | No
 
 
 def get_issue_ai_explanation(db: Session, public_id: str) -> IssueExplanationResponse | None:
-    """Ask Gemini to explain a single issue's EXISTING classification, on
+    """Ask Gemini to explain a single issue's existing classification, on
     demand, for an authority reviewing it. Returns None if no Issue
     matches public_id (route -> 404).
 
-    NEVER PERSISTED: this reads the issue's already-extracted structured
-    fields, calls Gemini fresh, and returns the result without writing
-    anything back to the Issue or any other table -- no new column, no
-    migration, nothing stored. Calling this twice in a row can produce
-    two different (though similarly-grounded) explanations; that's
-    expected and fine, since nothing here is authoritative.
+    Never persisted: reads the issue's already-extracted fields, calls
+    Gemini fresh, and returns the result without writing anything back.
+    Calling this twice may produce different explanations -- expected,
+    since nothing here is authoritative.
 
     Only structured/extracted fields are sent to Gemini (category,
     problem, location, duration, affected_population, severity,
     confidence, suggested_department, assigned_department, status_label)
-    -- never original_text or public_id, matching the same privacy
-    discipline as get_prioritized_insights() above.
+    -- never original_text or public_id, matching get_prioritized_insights().
 
-    Gemini is strictly advisory and explanatory here: it explains why the
-    EXISTING classification/department make sense, and is instructed
-    never to propose changing them (see EXPLANATION_SYSTEM_PROMPT). This
-    function itself provides an additional, code-level guarantee on top
-    of that prompt instruction -- it has no code path that writes to
-    Issue, IssueStatusHistory, or IssueAssignmentHistory at all.
+    Advisory only: Gemini explains why the existing classification/
+    department make sense and is instructed never to propose changing
+    them (see EXPLANATION_SYSTEM_PROMPT). This function adds a code-level
+    guarantee on top of that -- no path here writes to Issue,
+    IssueStatusHistory, or IssueAssignmentHistory.
 
-    If Gemini is unavailable, fails, or returns something unusable, a
-    sanitized (never raw-exception) `error` is returned instead of
-    fabricating an explanation -- this never blocks the rest of the
-    authority workflow, since the issue detail itself doesn't depend on
-    this endpoint succeeding.
+    If Gemini is unavailable or fails, a sanitized error is returned
+    instead of fabricating an explanation -- never blocks the rest of
+    the authority workflow.
     """
     issue = get_issue_by_public_id(db, public_id)
     if issue is None:

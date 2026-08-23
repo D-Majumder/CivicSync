@@ -34,7 +34,6 @@ itself uses -- CIVICSYNC_DEFAULT_JURISDICTION_CODE, etc.):
 from __future__ import annotations
 
 import argparse
-import io
 import json
 import sys
 from pathlib import Path
@@ -56,7 +55,6 @@ load_dotenv()
 from ai.schemas import CivicIssue, IssueCategory, SeverityLevel  # noqa: E402
 from backend.database import build_engine  # noqa: E402
 from backend.models import (  # noqa: E402
-    Issue,
     IssueStatusHistory,
     ReopenRequest,
     ResolutionEvidence,
