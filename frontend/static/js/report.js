@@ -252,6 +252,19 @@
       return;
     }
 
+    // A non-secure origin (plain HTTP, not localhost) is a very common,
+    // easy-to-miss cause of an unexplained "permission denied" with no
+    // visible browser prompt at all -- modern browsers refuse
+    // geolocation entirely on insecure origins and report it through
+    // the exact same PERMISSION_DENIED error code as an actual user
+    // denial, with no prompt ever shown. Checking this explicitly lets
+    // us tell the citizen the real reason instead of a generic denial
+    // message that retrying can never fix.
+    if (window.isSecureContext === false) {
+      setLocationStatus(window.CivicSyncI18n.t('location_insecure_context'), true);
+      return;
+    }
+
     useLocationButton.disabled = true;
     useLocationButtonLabel.textContent = window.CivicSyncI18n.t('location_locating_button');
     setLocationStatus(window.CivicSyncI18n.t('location_requesting'), false);
@@ -268,10 +281,21 @@
       },
       (error) => {
         useLocationButton.disabled = false;
-        useLocationButtonLabel.textContent = window.CivicSyncI18n.t('location_use_button');
+        // Re-labeled to make the retry path explicit and discoverable --
+        // the button still does exactly the same thing (calls
+        // getCurrentPosition again), which succeeds immediately once
+        // the citizen has actually changed their browser's site
+        // permission, with no page reload needed.
+        useLocationButtonLabel.textContent = window.CivicSyncI18n.t('location_try_again_button');
         capturedLocation = null;
         // PERMISSION_DENIED = 1, POSITION_UNAVAILABLE = 2, TIMEOUT = 3 --
-        // every case still leaves the complaint fully submit-able.
+        // every case still leaves the complaint fully submit-able. A
+        // denial with NO visible prompt (the reported symptom) is
+        // standard browser behavior once a site's geolocation
+        // permission is already blocked -- the browser does not show a
+        // fresh prompt on every subsequent request, it just replays the
+        // stored decision. The message below explains this rather than
+        // implying a prompt was missed or something is broken.
         if (error.code === error.PERMISSION_DENIED) {
           setLocationStatus(
             window.CivicSyncI18n.t('location_permission_denied'),

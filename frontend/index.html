@@ -18,17 +18,30 @@
           <img src="/static/assets/logo.png" alt="CivicSync" />
           <span>CivicSync</span>
         </a>
-        <nav class="site-nav" aria-label="Primary">
-          <a href="/" aria-current="page" data-i18n="nav_report">Report Issue</a>
-          <a href="/track" data-i18n="nav_track">Track Status</a>
-          <a href="#" class="is-disabled" aria-disabled="true" tabindex="-1" title="Coming in a future milestone" data-i18n="nav_impact_map">Impact Map</a>
+
+        <button
+          type="button"
+          class="site-header__nav-toggle"
+          id="citizen-nav-toggle"
+          aria-label="Menu"
+          aria-expanded="false"
+          aria-controls="citizen-nav-collapsible"
+        >☰</button>
+
+        <div class="site-nav-collapsible" id="citizen-nav-collapsible">
+          <nav class="site-nav" aria-label="Primary">
+            <a href="/" aria-current="page" data-i18n="nav_report">Report Issue</a>
+            <a href="/track" data-i18n="nav_track">Track Status</a>
+            <a href="#" class="is-disabled" aria-disabled="true" tabindex="-1" title="Coming in a future milestone" data-i18n="nav_impact_map">Impact Map</a>
+          </nav>
           <span class="language-switcher" aria-label="Language">
             <span class="language-switcher__label" aria-hidden="true">🌐</span>
             <button type="button" data-language-option="en" aria-label="English">EN</button>
             <button type="button" data-language-option="hi" aria-label="हिन्दी">हिं</button>
             <button type="button" data-language-option="bn" aria-label="বাংলা">বাং</button>
           </span>
-        </nav>
+          <a href="/authority/login" class="btn btn-secondary site-header__authority-btn" data-i18n="nav_authority_portal">Authority Portal</a>
+        </div>
       </div>
     </header>
 
@@ -220,10 +233,31 @@
     </main>
 
     <footer class="site-footer">
-      <div class="container site-footer__inner">
-        <span>© 2026 CivicSync</span>
-        <span>AI-assisted civic accountability platform</span>
-        <a href="/authority/login" style="color: var(--color-on-surface-variant);">Authority Portal</a>
+      <div class="container site-footer__grid">
+        <div class="site-footer__brand">
+          <a href="/" class="brand">
+            <img src="/static/assets/logo.png" alt="CivicSync" />
+            <span>CivicSync</span>
+          </a>
+          <p class="site-footer__tagline" data-i18n="footer_tagline">
+            AI-assisted civic issue reporting and accountability — from citizen report to authority resolution.
+          </p>
+        </div>
+
+        <div class="site-footer__col">
+          <p class="site-footer__col-heading" data-i18n="footer_heading_citizen">Citizen</p>
+          <a href="/" data-i18n="nav_report">Report Issue</a>
+          <a href="/track" data-i18n="nav_track">Track Status</a>
+        </div>
+
+        <div class="site-footer__col">
+          <p class="site-footer__col-heading" data-i18n="footer_heading_authority">Authority</p>
+          <a href="/authority/login" data-i18n="nav_authority_portal">Authority Portal</a>
+        </div>
+      </div>
+
+      <div class="container site-footer__bottom">
+        <span data-i18n="footer_copyright">© 2026 CivicSync</span>
       </div>
     </footer>
   </div>

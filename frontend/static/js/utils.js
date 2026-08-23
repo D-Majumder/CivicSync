@@ -97,3 +97,28 @@ const CivicSyncUtils = {
 };
 
 window.CivicSyncUtils = CivicSyncUtils;
+
+// --- Citizen header mobile nav toggle (Milestone 25.8) -----------------------
+// Shared by index.html and track.html (both load this file). Desktop is
+// unaffected -- the toggle button is display:none there via CSS and the
+// nav/language-switcher/Authority Portal panel is always visible.
+(function initCitizenHeaderToggle() {
+  const toggle = document.getElementById('citizen-nav-toggle');
+  const headerInner = document.querySelector('.site-header__inner');
+  if (!toggle || !headerInner) return;
+
+  toggle.addEventListener('click', () => {
+    const isOpen = headerInner.classList.toggle('is-nav-open');
+    toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  });
+
+  // Close the drawer after choosing a language or a nav link, so the
+  // citizen isn't left staring at an open drawer after acting on it.
+  headerInner.querySelectorAll('a, [data-language-option]').forEach((el) => {
+    el.addEventListener('click', () => {
+      headerInner.classList.remove('is-nav-open');
+      toggle.setAttribute('aria-expanded', 'false');
+    });
+  });
+})();
+

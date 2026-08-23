@@ -11,13 +11,14 @@
 .site-header {
   background: #ffffff;
   border-bottom: 1px solid var(--color-card-border);
+  box-shadow: var(--shadow-sm);
 }
 
 .site-header__inner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-md);
+  gap: var(--space-lg);
   padding-top: var(--space-md);
   padding-bottom: var(--space-md);
 }
@@ -31,14 +32,21 @@
 }
 
 .brand img {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
 }
 
 .brand span {
-  font-weight: 700;
-  font-size: 18px;
-  letter-spacing: -0.01em;
+  font-weight: 800;
+  font-size: 19px;
+  letter-spacing: -0.015em;
+  color: var(--color-primary);
+}
+
+.site-nav-collapsible {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
 }
 
 .site-nav {
@@ -71,39 +79,143 @@
   pointer-events: none;
 }
 
-@media (max-width: 640px) {
+/* Authority Portal is a deliberate, distinct entry point -- a small
+   outlined button, not another plain nav link, so it reads as "a
+   different kind of action" rather than an afterthought. */
+.site-header__authority-btn {
+  white-space: nowrap;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  min-height: 36px;
+}
+
+/* Hidden on desktop -- the full nav is always visible there, so there
+   is nothing to toggle. */
+.site-header__nav-toggle {
+  display: none;
+  background: transparent;
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-default);
+  color: var(--color-on-surface);
+  font-size: 18px;
+  line-height: 1;
+  padding: 6px 10px;
+  min-width: 44px;
+  min-height: 44px;
+  cursor: pointer;
+}
+.site-header__nav-toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+@media (max-width: 860px) {
+  .site-header__nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  /* Collapsed by default on mobile -- a real drawer, not the nav
+     simply wrapping below the brand. The full nav, language switcher,
+     and Authority Portal button appear together when the hamburger is
+     tapped, and stack vertically for easy tapping. */
+  .site-nav-collapsible {
+    display: none;
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-md);
+    margin-top: var(--space-sm);
+    padding-top: var(--space-md);
+    border-top: 1px solid var(--color-card-border);
+  }
+  .site-header__inner.is-nav-open .site-nav-collapsible {
+    display: flex;
+  }
   .site-header__inner {
     flex-wrap: wrap;
-    row-gap: var(--space-sm);
   }
   .site-nav {
-    flex-basis: 100%;
-    gap: var(--space-md);
-    flex-wrap: wrap;
-    row-gap: 6px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-sm);
   }
-  .brand span {
-    font-size: 16px;
+  .site-nav a {
+    padding: 6px 0;
+    font-size: 15px;
   }
   .language-switcher {
     margin-left: 0;
+  }
+  .site-header__authority-btn {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
   }
 }
 
 .site-footer {
   border-top: 1px solid var(--color-card-border);
-  padding: var(--space-lg) 0;
+  padding-top: var(--space-xl);
   margin-top: var(--space-xl);
+  background: var(--color-surface-container-lowest, #ffffff);
 }
 
-.site-footer__inner {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-md);
-  align-items: center;
-  justify-content: space-between;
+.site-footer__grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: var(--space-xl);
+  padding-bottom: var(--space-lg);
+}
+
+.site-footer__brand .brand {
+  margin-bottom: var(--space-sm);
+}
+
+.site-footer__tagline {
   font-size: var(--body-sm-size);
   color: var(--color-on-surface-variant);
+  max-width: 32em;
+  margin: 0;
+}
+
+.site-footer__col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.site-footer__col-heading {
+  font-size: var(--label-md-size);
+  font-weight: var(--label-md-weight);
+  letter-spacing: var(--label-md-tracking);
+  text-transform: uppercase;
+  color: var(--color-on-surface-variant);
+  margin: 0 0 4px;
+}
+
+.site-footer__col a {
+  color: var(--color-on-surface);
+  text-decoration: none;
+  font-size: var(--body-sm-size);
+}
+.site-footer__col a:hover {
+  color: var(--color-action);
+  text-decoration: underline;
+}
+
+.site-footer__bottom {
+  border-top: 1px solid var(--color-card-border);
+  padding: var(--space-md) 0;
+  font-size: var(--body-sm-size);
+  color: var(--color-on-surface-variant);
+}
+
+@media (max-width: 700px) {
+  .site-footer__grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-lg);
+  }
 }
 
 /* --- Buttons ----------------------------------------------------------------- */
@@ -189,6 +301,16 @@
   flex-direction: column;
   gap: var(--space-xs);
   margin-bottom: var(--space-md);
+}
+
+/* Milestone 25.8: a subtle divider between consecutive top-level form
+   sections (describe the issue / location) inside the report form, so
+   the two are visually grouped as distinct steps rather than one
+   continuous block. Scoped to #report-form so it never affects the
+   compact location-adjust sub-fields or any other form on the site. */
+#report-form > .field + .field {
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--color-card-border);
 }
 
 .field label {
