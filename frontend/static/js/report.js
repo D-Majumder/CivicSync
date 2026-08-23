@@ -372,11 +372,12 @@
       departmentListEl.innerHTML = '';
       departments.forEach((dept) => {
         const li = document.createElement('li');
-        li.innerHTML = `<span>${CivicSyncUtils.escapeHtml(dept.name)}</span>`;
+        li.className = 'chip chip-neutral';
+        li.textContent = dept.name;
         departmentListEl.appendChild(li);
       });
     } catch (err) {
-      departmentListEl.innerHTML = '<li>Department list unavailable right now.</li>';
+      departmentListEl.innerHTML = '<li class="chip chip-neutral">Department list unavailable right now.</li>';
     }
   }
 

@@ -23,9 +23,10 @@
           <a href="/track" data-i18n="nav_track">Track Status</a>
           <a href="#" class="is-disabled" aria-disabled="true" title="Coming in a future milestone" data-i18n="nav_impact_map">Impact Map</a>
           <span class="language-switcher" aria-label="Language">
-            <button type="button" data-language-option="en">EN</button>
-            <button type="button" data-language-option="hi">हिं</button>
-            <button type="button" data-language-option="bn">বাং</button>
+            <span class="language-switcher__label" aria-hidden="true">🌐</span>
+            <button type="button" data-language-option="en" aria-label="English">EN</button>
+            <button type="button" data-language-option="hi" aria-label="हिन्दी">हिं</button>
+            <button type="button" data-language-option="bn" aria-label="বাংলা">বাং</button>
           </span>
         </nav>
       </div>
@@ -43,6 +44,12 @@
               CivicSync turns your report into a structured civic record: classified by AI,
               routed to the right department, and trackable from submission through to resolution.
             </p>
+            <ul class="capability-list" aria-label="What CivicSync does">
+              <li class="chip chip-neutral"><span aria-hidden="true">🤖</span> <span data-i18n="hero_badge_ai">AI-Classified</span></li>
+              <li class="chip chip-neutral"><span aria-hidden="true">🌐</span> <span data-i18n="hero_badge_languages">English · हिंदी · বাংলা</span></li>
+              <li class="chip chip-neutral"><span aria-hidden="true">📍</span> <span data-i18n="hero_badge_location">Location-Aware</span></li>
+              <li class="chip chip-neutral"><span aria-hidden="true">🔍</span> <span data-i18n="hero_badge_tracking">Transparent Tracking</span></li>
+            </ul>
           </div>
 
           <div class="flow-grid">
@@ -81,6 +88,9 @@
                       Location not captured. This is optional and never blocks submission.
                     </p>
                     <div id="location-adjust-wrap" hidden style="margin-top: 8px; gap: 8px; flex-wrap: wrap;">
+                      <p class="field-hint" style="flex-basis: 100%; margin: 0 0 4px;" data-i18n="location_coordinates_explainer">
+                        These numbers mark the exact spot for this report (not shown on a map here) — they help the authority find the problem faster. You usually won't need to change them.
+                      </p>
                       <div style="flex: 1 1 120px; min-width: 0;">
                         <label for="location-lat-input" class="field-hint" data-i18n="location_latitude">Latitude</label>
                         <input type="number" step="any" id="location-lat-input" min="-90" max="90" style="width: 100%; box-sizing: border-box;" />
@@ -118,7 +128,7 @@
                 <div class="card__body">
                   <p style="margin-bottom: 8px;">Reports are routed to one of CivicSync's civic departments:</p>
                   <ul class="department-list" id="department-list">
-                    <li>Loading…</li>
+                    <li class="chip chip-neutral">Loading…</li>
                   </ul>
                 </div>
               </div>

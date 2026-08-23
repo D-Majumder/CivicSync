@@ -26,6 +26,11 @@
       footer_tagline: 'AI-assisted civic accountability platform',
       footer_authority_portal: 'Authority Portal',
 
+      hero_badge_ai: 'AI-Classified',
+      hero_badge_languages: 'English · हिंदी · বাংলা',
+      hero_badge_location: 'Location-Aware',
+      hero_badge_tracking: 'Transparent Tracking',
+
       report_heading: 'Submit a Report',
       report_subheading: "Describe the issue in your own words \u2014 CivicSync's AI will classify it and route it to the right department.",
       report_field_label: 'Describe the issue',
@@ -46,6 +51,7 @@
       location_permission_denied: 'Location permission was denied. You can still submit your report without it.',
       location_unavailable: 'Location is currently unavailable. You can still submit your report without it.',
       location_unsupported: 'Location is not supported by this browser. You can still submit your report.',
+      location_coordinates_explainer: "These numbers mark the exact spot for this report (not shown on a map here) \u2014 they help the authority find the problem faster. You usually won't need to change them.",
       location_latitude: 'Latitude',
       location_longitude: 'Longitude',
       location_clear_button: 'Clear location',
@@ -111,6 +117,11 @@
       footer_tagline: 'AI-सहायता प्राप्त नागरिक जवाबदेही मंच',
       footer_authority_portal: 'प्राधिकरण पोर्टल',
 
+      hero_badge_ai: 'AI द्वारा वर्गीकृत',
+      hero_badge_languages: 'English · हिंदी · বাংলা',
+      hero_badge_location: 'स्थान-सहित',
+      hero_badge_tracking: 'पारदर्शी ट्रैकिंग',
+
       report_heading: 'शिकायत दर्ज करें',
       report_subheading: 'समस्या को अपने शब्दों में बताएं \u2014 CivicSync का AI इसे वर्गीकृत करके सही विभाग को भेजेगा।',
       report_field_label: 'समस्या का विवरण दें',
@@ -131,6 +142,7 @@
       location_permission_denied: 'स्थान की अनुमति अस्वीकार कर दी गई। आप बिना स्थान के भी शिकायत सबमिट कर सकते हैं।',
       location_unavailable: 'स्थान फिलहाल उपलब्ध नहीं है। आप बिना स्थान के भी शिकायत सबमिट कर सकते हैं।',
       location_unsupported: 'यह ब्राउज़र स्थान सुविधा का समर्थन नहीं करता। आप फिर भी शिकायत सबमिट कर सकते हैं।',
+      location_coordinates_explainer: 'ये संख्याएं इस शिकायत का सटीक स्थान दर्शाती हैं (यहां मानचित्र पर नहीं दिखाया गया) \u2014 इससे प्राधिकरण को समस्या जल्दी ढूंढने में मदद मिलती है। आमतौर पर आपको इन्हें बदलने की आवश्यकता नहीं होगी।',
       location_latitude: 'अक्षांश',
       location_longitude: 'देशांतर',
       location_clear_button: 'स्थान हटाएं',
@@ -196,6 +208,11 @@
       footer_tagline: 'AI-সহায়ক নাগরিক জবাবদিহিতা প্ল্যাটফর্ম',
       footer_authority_portal: 'কর্তৃপক্ষ পোর্টাল',
 
+      hero_badge_ai: 'AI দ্বারা শ্রেণীবদ্ধ',
+      hero_badge_languages: 'English · হিন্দি · বাংলা',
+      hero_badge_location: 'অবস্থান-সহ',
+      hero_badge_tracking: 'স্বচ্ছ ট্র্যাকিং',
+
       report_heading: 'অভিযোগ জমা দিন',
       report_subheading: 'সমস্যাটি নিজের ভাষায় লিখুন \u2014 CivicSync-এর AI এটি শ্রেণীবদ্ধ করে সঠিক বিভাগে পাঠাবে।',
       report_field_label: 'সমস্যাটি বর্ণনা করুন',
@@ -216,6 +233,7 @@
       location_permission_denied: 'অবস্থানের অনুমতি প্রত্যাখ্যান করা হয়েছে। আপনি অবস্থান ছাড়াই অভিযোগ জমা দিতে পারেন।',
       location_unavailable: 'অবস্থান বর্তমানে অনুপলব্ধ। আপনি অবস্থান ছাড়াই অভিযোগ জমা দিতে পারেন।',
       location_unsupported: 'এই ব্রাউজার অবস্থান সুবিধা সমর্থন করে না। আপনি তবুও অভিযোগ জমা দিতে পারেন।',
+      location_coordinates_explainer: 'এই সংখ্যাগুলি এই অভিযোগের সঠিক অবস্থান নির্দেশ করে (এখানে মানচিত্রে দেখানো হয়নি) \u2014 এটি কর্তৃপক্ষকে সমস্যাটি দ্রুত খুঁজে পেতে সাহায্য করে। সাধারণত আপনাকে এগুলি পরিবর্তন করার প্রয়োজন হবে না।',
       location_latitude: 'অক্ষাংশ',
       location_longitude: 'দ্রাঘিমাংশ',
       location_clear_button: 'অবস্থান মুছুন',
