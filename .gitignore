@@ -58,3 +58,4 @@ data/raw/
 
 # Docker
 docker-compose.override.yml
+evidence_storage/*.png
