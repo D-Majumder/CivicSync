@@ -72,7 +72,12 @@
 }
 
 @media (max-width: 640px) {
+  .site-header__inner {
+    flex-wrap: wrap;
+    row-gap: var(--space-sm);
+  }
   .site-nav {
+    flex-basis: 100%;
     gap: var(--space-md);
     flex-wrap: wrap;
     row-gap: 6px;
@@ -119,6 +124,18 @@
   line-height: 1;
 }
 
+/* Consistent, visible keyboard focus for buttons and citizen nav links
+   (Milestone 25.1) -- previously relied on the browser's inconsistent
+   default outline. :focus-visible so this only appears for keyboard
+   navigation, never on a mouse click, preserving the existing feel for
+   mouse/touch use. Uses --focus-ring (Action Blue) -- no new color. */
+.btn:focus-visible,
+.site-nav a:focus-visible,
+.brand:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
 .btn-primary {
   background: var(--color-primary);
   color: var(--color-on-primary);
@@ -152,6 +169,7 @@
   background: #ffffff;
   border: 1px solid var(--color-card-border);
   border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 .card__header {
@@ -426,6 +444,11 @@
   pointer-events: none;
 }
 
+.authority-nav a:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
 .authority-main {
   flex: 1;
   min-width: 0;
@@ -463,6 +486,17 @@
   border: 1px solid var(--color-card-border);
   border-radius: var(--radius-lg);
   padding: var(--space-md);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Headline KPI strip (the top-of-dashboard summary row) reads as the
+   primary entry point into the page -- stronger elevation plus a
+   restrained accent top-border in the existing Action Blue, so it's
+   visually distinct from secondary/nested metric grids elsewhere on
+   the same page without introducing a new color. */
+.kpi-grid--headline .kpi-card {
+  box-shadow: var(--shadow-md);
+  border-top: 3px solid var(--color-action);
 }
 
 .kpi-card__label {

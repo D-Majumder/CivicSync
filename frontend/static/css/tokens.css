@@ -105,8 +105,26 @@
   --radius-xl: 0.75rem;
   --radius-full: 9999px;
 
-  /* --- Elevation (from DESIGN.md "Elevation & Depth") --- */
-  --shadow-subtle: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  /* --- Elevation (from DESIGN.md "Elevation & Depth") ---
+     A restrained 3-level scale, tinted with the primary navy
+     (#0f172a = rgb(15 23 42)) rather than generic black, so elevation
+     reads as part of the same palette instead of a bolted-on effect.
+     sm = baseline resting elevation for ordinary cards; md = for
+     content that should visually lead (e.g. headline KPIs); lg =
+     reserved for overlays/modals sitting above page content. */
+  --shadow-sm: 0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 1px 0 rgb(15 23 42 / 0.03);
+  --shadow-md: 0 4px 6px -1px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.06);
+  --shadow-lg: 0 10px 15px -3px rgb(15 23 42 / 0.10), 0 4px 6px -4px rgb(15 23 42 / 0.08);
+  /* Kept as an alias for anything already referencing the old single
+     token -- equivalent to --shadow-sm. */
+  --shadow-subtle: var(--shadow-sm);
+
+  /* --- Focus ring (Milestone 25.1) --- consistent, visible keyboard
+     focus indicator for interactive controls that don't already have
+     a bespoke :focus treatment (form inputs keep their own border-based
+     focus style, unchanged). Uses the existing Action Blue -- no new
+     color introduced. */
+  --focus-ring: 0 0 0 2px var(--color-surface-container-lowest), 0 0 0 4px var(--color-action);
 }
 
 /* ============================================================================
