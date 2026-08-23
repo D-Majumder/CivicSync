@@ -253,6 +253,39 @@
   margin-bottom: var(--space-xs);
 }
 
+/* Milestone 25.4: the current status is the single most important fact
+   on this page -- give its chip more visual weight than an ordinary
+   inline status chip elsewhere, without introducing a new color. */
+.chip.chip-lg {
+  font-size: 14px;
+  padding: 6px 14px;
+  font-weight: 700;
+}
+
+/* Resolution panel (Milestone 25.4): a distinct, official-toned card --
+   reuses the existing success semantic color already used for the
+   "Resolved" status chip, so a resolved issue's official record reads
+   as a completed, positive action at a glance. */
+.resolution-panel {
+  border-color: var(--color-success-container);
+  background: linear-gradient(180deg, var(--color-success-container) 0%, #ffffff 72px);
+}
+.resolution-panel .card__header {
+  border-bottom-color: var(--color-success-container);
+}
+
+/* Reopen panel (Milestone 25.4): visually distinct from the Resolution
+   panel above -- reuses the existing warning semantic color, since this
+   represents an open citizen action/dispute rather than settled,
+   official information. */
+.reopen-panel {
+  border-color: var(--color-warning-container);
+  background: linear-gradient(180deg, var(--color-warning-container) 0%, #ffffff 72px);
+}
+.reopen-panel .card__header {
+  border-bottom-color: var(--color-warning-container);
+}
+
 .track-meta-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -330,6 +363,30 @@
 }
 .evidence-link:hover {
   text-decoration: none;
+}
+
+/* Milestone 25.4: each evidence file as a distinct row, so multiple
+   attachments read as a clear list of proof rather than a run-on line
+   of links. word-break/overflow-wrap so a long original filename can
+   never cause horizontal overflow on a narrow screen. */
+.evidence-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  padding: var(--space-sm);
+  background: #ffffff;
+  border: 1px solid var(--color-success-container);
+  border-radius: var(--radius-default);
+  margin-bottom: var(--space-sm);
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+.evidence-item:last-child {
+  margin-bottom: 0;
+}
+.evidence-item__meta {
+  color: var(--color-on-surface-variant);
 }
 
 /* Citizen-facing language switcher (Milestone 22) -- admin never loads

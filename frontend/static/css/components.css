@@ -376,6 +376,14 @@
   box-shadow: 0 0 0 1px var(--color-action), 0 0 0 4px var(--color-secondary-container);
 }
 
+/* Milestone 25.4: past/completed steps recede slightly so the current
+   status (already visually distinguished above by a larger, ringed
+   dot) is unambiguously the focal point of the timeline. */
+.timeline__item:not(.timeline__item--current) .timeline__status {
+  color: var(--color-on-surface-variant);
+  font-weight: 500;
+}
+
 .timeline__status {
   font-weight: 600;
   font-size: var(--body-md-size);

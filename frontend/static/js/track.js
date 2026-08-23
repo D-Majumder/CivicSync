@@ -107,7 +107,7 @@
       elEvidenceList.innerHTML = '';
       evidence.forEach((item) => {
         const li = document.createElement('li');
-        li.style.marginBottom = '6px';
+        li.className = 'evidence-item';
         const link = document.createElement('a');
         link.href = `/api/track/${encodeURIComponent(issue.public_id)}/evidence/${encodeURIComponent(item.public_id)}/file`;
         link.target = '_blank';
@@ -116,9 +116,7 @@
         link.textContent = `\ud83d\udcce ${item.original_filename}`;
         li.appendChild(link);
         const meta = document.createElement('span');
-        meta.className = 'type-body-sm';
-        meta.style.color = 'var(--color-on-surface-variant)';
-        meta.style.marginLeft = '8px';
+        meta.className = 'type-body-sm evidence-item__meta';
         meta.textContent = CivicSyncUtils.formatTimestamp(item.uploaded_at);
         li.appendChild(meta);
         elEvidenceList.appendChild(li);

@@ -112,12 +112,12 @@
 
         <!-- Result state -->
         <div id="track-result" hidden>
-          <div class="track-header">
+          <div class="track-header" id="track-status-banner">
             <div>
               <p class="track-header__id">Tracking ID: <strong id="track-public-id"></strong></p>
               <h1 class="type-headline-md" id="track-category"></h1>
             </div>
-            <span class="chip" id="track-status-chip"></span>
+            <span class="chip chip-lg" id="track-status-chip"></span>
           </div>
 
           <div class="track-layout">
@@ -156,28 +156,46 @@
                       <dd id="track-updated-at"></dd>
                     </div>
                   </dl>
-                  <div id="track-resolution" hidden style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--color-outline-variant);">
-                    <p class="type-label" data-i18n="track_resolution_heading">Resolution</p>
-                    <p id="track-resolution-note" style="margin-top: 4px;"></p>
-                    <p class="type-body-sm" style="color: var(--color-on-surface-variant); margin-top: 4px;">Resolved <span id="track-resolved-at"></span></p>
-                  </div>
-                  <div id="track-evidence" hidden style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--color-outline-variant);">
+                </div>
+              </div>
+
+              <!-- Resolution + evidence (Milestone 25.4): a distinct,
+                   official-toned card -- evidence is nested inside it
+                   rather than a separate top-level card, so it stays
+                   visually tied to the resolution it documents. -->
+              <div id="track-resolution" class="card resolution-panel" style="margin-bottom: var(--space-lg);" hidden>
+                <div class="card__header">
+                  <h2 class="type-headline-sm" data-i18n="track_resolution_heading">Resolution</h2>
+                  <p class="type-body-sm" style="color: var(--color-on-surface-variant); margin-top: 4px;">Resolved <span id="track-resolved-at"></span></p>
+                </div>
+                <div class="card__body">
+                  <p id="track-resolution-note"></p>
+                  <div id="track-evidence" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--color-success-container);" hidden>
                     <p class="type-label" data-i18n="track_evidence_heading">Resolution Evidence</p>
                     <ul id="track-evidence-list" style="list-style: none; padding: 0; margin: 8px 0 0;"></ul>
                   </div>
-                  <div id="track-reopen-section" hidden style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--color-outline-variant);">
-                    <p class="type-label" data-i18n="reopen_prompt">Not satisfied with the resolution?</p>
-                    <div id="track-reopen-form-wrapper">
-                      <p class="type-body-sm" style="color: var(--color-on-surface-variant); margin: 4px 0 8px;">
-                        Submitting this sends a request to the authority for review — it does not reopen the issue immediately.
-                      </p>
-                      <textarea id="track-reopen-reason" rows="3" style="width: 100%; box-sizing: border-box;" placeholder="Explain why the resolution was inadequate or the issue has returned…" data-i18n-placeholder="reopen_reason_placeholder"></textarea>
-                      <button class="btn btn-secondary mt-sm" id="track-reopen-submit-btn" type="button" data-i18n="reopen_submit_button">Request Reopening</button>
-                      <p class="action-feedback" id="track-reopen-feedback"></p>
-                    </div>
-                    <div id="track-reopen-status" hidden>
-                      <p id="track-reopen-status-text" class="type-body-sm"></p>
-                    </div>
+                </div>
+              </div>
+
+              <!-- Reopen request (Milestone 25.4): a distinct, citizen
+                   -action-toned card -- visually different from the
+                   official Resolution card above, so it reads as "your
+                   action" rather than more status information. -->
+              <div id="track-reopen-section" class="card reopen-panel" hidden>
+                <div class="card__header">
+                  <h2 class="type-headline-sm" data-i18n="reopen_prompt">Not satisfied with the resolution?</h2>
+                </div>
+                <div class="card__body">
+                  <div id="track-reopen-form-wrapper">
+                    <p class="type-body-sm" style="color: var(--color-on-surface-variant); margin: 0 0 8px;">
+                      Submitting this sends a request to the authority for review — it does not reopen the issue immediately.
+                    </p>
+                    <textarea id="track-reopen-reason" rows="3" style="width: 100%; box-sizing: border-box;" placeholder="Explain why the resolution was inadequate or the issue has returned…" data-i18n-placeholder="reopen_reason_placeholder"></textarea>
+                    <button class="btn btn-secondary mt-sm" id="track-reopen-submit-btn" type="button" data-i18n="reopen_submit_button">Request Reopening</button>
+                    <p class="action-feedback" id="track-reopen-feedback"></p>
+                  </div>
+                  <div id="track-reopen-status" hidden>
+                    <p id="track-reopen-status-text" class="type-body-sm"></p>
                   </div>
                 </div>
               </div>
