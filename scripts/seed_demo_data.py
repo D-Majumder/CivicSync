@@ -43,6 +43,16 @@ from sqlalchemy.orm import sessionmaker
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+# This is a standalone CLI, not run through backend/main.py (which calls
+# load_dotenv() itself before any app code needs GEMINI_API_KEY,
+# CIVICSYNC_DEFAULT_JURISDICTION_CODE, etc.) -- without this, none of
+# the repository's .env values reach os.environ when this script is run
+# directly, and get_default_jurisdiction_id() below fails even when a
+# correctly-configured .env sits right next to civicsync.db.
+from dotenv import load_dotenv  # noqa: E402
+
+load_dotenv()
+
 from ai.schemas import CivicIssue, IssueCategory, SeverityLevel  # noqa: E402
 from backend.database import build_engine  # noqa: E402
 from backend.models import (  # noqa: E402

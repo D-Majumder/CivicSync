@@ -1,0 +1,526 @@
+{
+  "dataset_version": "1.0",
+  "description": "Milestone 24 evaluation dataset for CivicSync's existing Gemini complaint-understanding pipeline (ai.client.analyze_complaint). Every case is a realistic civic complaint in English, Hindi, or Bengali. `supported_facts` lists concrete facts genuinely present in the input text (informational only -- not machine-checked). `must_not_invent` lists specific concrete facts that do NOT appear in the input and must never be fabricated by the AI's structured output. `expected_category`/`expected_severity` are only set when the input is unambiguous enough to defend a specific expectation; both are null for genuinely ambiguous or insufficient-information cases by design -- forcing an expectation there would itself be a form of fabrication.",
+  "cases": [
+    {
+      "id": "EN-NORM-01",
+      "language": "en",
+      "input_type": "normal",
+      "input": "There is a big pothole near the school on Main Street, it's been there for two weeks and is dangerous for children walking home.",
+      "expected_category": "Roads and Potholes",
+      "expected_severity": null,
+      "supported_facts": ["pothole", "near a school", "Main Street", "two weeks", "danger to children"],
+      "must_not_invent": ["water main", "streetlight", "garbage", "exact width or depth of the pothole"]
+    },
+    {
+      "id": "EN-NORM-02",
+      "language": "en",
+      "input_type": "normal",
+      "input": "The street light outside our house on Park Road has not worked for about a month, it's very dark at night now.",
+      "expected_category": "Street Lighting",
+      "expected_severity": null,
+      "supported_facts": ["streetlight not working", "Park Road", "about a month", "dark at night"],
+      "must_not_invent": ["pothole", "vandalism", "electric shock", "specific pole number"]
+    },
+    {
+      "id": "EN-NORM-03",
+      "language": "en",
+      "input_type": "normal",
+      "input": "Garbage has not been collected on our street in Rabindra Nagar for over a week, it is starting to smell badly.",
+      "expected_category": "Sanitation and Waste",
+      "expected_severity": null,
+      "supported_facts": ["garbage not collected", "Rabindra Nagar", "over a week", "bad smell"],
+      "must_not_invent": ["rats", "disease outbreak", "specific number of bins"]
+    },
+    {
+      "id": "EN-NORM-04",
+      "language": "en",
+      "input_type": "normal",
+      "input": "There is a burst water pipe near the market causing the road to flood, this started this morning.",
+      "expected_category": "Water Supply",
+      "expected_severity": null,
+      "supported_facts": ["burst water pipe", "near the market", "road flooding", "started this morning"],
+      "must_not_invent": ["property damage amount", "number of affected households", "cause of the burst"]
+    },
+    {
+      "id": "HI-NORM-01",
+      "language": "hi",
+      "input_type": "normal",
+      "input": "हमारे मोहल्ले में पिछले तीन दिन से पानी की आपूर्ति बंद है, कृपया जल्द ठीक करें।",
+      "expected_category": "Water Supply",
+      "expected_severity": null,
+      "supported_facts": ["water supply stopped", "three days", "in the neighborhood"],
+      "must_not_invent": ["pipe leakage location", "contamination", "number of affected homes"]
+    },
+    {
+      "id": "HI-NORM-02",
+      "language": "hi",
+      "input_type": "normal",
+      "input": "स्कूल के सामने वाली सड़क पर बहुत बड़ा गड्ढा है, कल एक साइकिल सवार गिर गया था।",
+      "expected_category": "Roads and Potholes",
+      "expected_severity": null,
+      "supported_facts": ["large pothole", "road in front of a school", "cyclist fell yesterday"],
+      "must_not_invent": ["injury severity", "cyclist's identity", "exact pothole dimensions"]
+    },
+    {
+      "id": "HI-NORM-03",
+      "language": "hi",
+      "input_type": "normal",
+      "input": "गली की स्ट्रीट लाइट एक हफ्ते से खराब है, रात में अंधेरा रहता है और डर लगता है।",
+      "expected_category": "Street Lighting",
+      "expected_severity": null,
+      "supported_facts": ["streetlight broken", "one week", "dark at night", "residents feel unsafe"],
+      "must_not_invent": ["crime incident", "specific street name", "number of lights affected"]
+    },
+    {
+      "id": "HI-NORM-04",
+      "language": "hi",
+      "input_type": "normal",
+      "input": "बाजार के पास कूड़ा बहुत दिनों से जमा है, सफाई नहीं हुई है।",
+      "expected_category": "Sanitation and Waste",
+      "expected_severity": null,
+      "supported_facts": ["garbage accumulated", "near the market", "not cleaned for many days"],
+      "must_not_invent": ["exact quantity of garbage", "health complaints from residents"]
+    },
+    {
+      "id": "BN-NORM-01",
+      "language": "bn",
+      "input_type": "normal",
+      "input": "আমাদের এলাকায় রাস্তার বাতি দুই সপ্তাহ ধরে নষ্ট, রাতে খুব অন্ধকার থাকে।",
+      "expected_category": "Street Lighting",
+      "expected_severity": null,
+      "supported_facts": ["streetlight broken", "two weeks", "very dark at night"],
+      "must_not_invent": ["theft incident", "specific pole location", "number of lights"]
+    },
+    {
+      "id": "BN-NORM-02",
+      "language": "bn",
+      "input_type": "normal",
+      "input": "স্কুলের সামনের রাস্তায় বড় গর্ত আছে, খুব বিপজ্জনক, বাচ্চারা স্কুলে যাওয়ার সময় সমস্যা হয়।",
+      "expected_category": "Roads and Potholes",
+      "expected_severity": null,
+      "supported_facts": ["large pothole", "in front of a school", "dangerous", "affects children going to school"],
+      "must_not_invent": ["specific injury", "pothole depth", "exact date it appeared"]
+    },
+    {
+      "id": "BN-NORM-03",
+      "language": "bn",
+      "input_type": "normal",
+      "input": "বাজারের কাছে জল সরবরাহের পাইপ ফেটে গেছে, রাস্তায় জল জমে আছে তিন দিন ধরে।",
+      "expected_category": "Water Supply",
+      "expected_severity": null,
+      "supported_facts": ["water pipe burst", "near the market", "water pooling on road", "three days"],
+      "must_not_invent": ["contamination risk", "number of affected shops", "repair cost"]
+    },
+    {
+      "id": "BN-NORM-04",
+      "language": "bn",
+      "input_type": "normal",
+      "input": "আমাদের গলিতে গত এক সপ্তাহ ধরে আবর্জনা তোলা হয়নি, দুর্গন্ধ ছড়াচ্ছে।",
+      "expected_category": "Sanitation and Waste",
+      "expected_severity": null,
+      "supported_facts": ["garbage not collected", "one week", "bad smell spreading"],
+      "must_not_invent": ["insect infestation", "specific lane name", "health impact"]
+    },
+    {
+      "id": "EN-SPELL-01",
+      "language": "en",
+      "input_type": "spelling_error",
+      "input": "strret lite not workin near skool 4 two weaks, very dangerus at nite",
+      "expected_category": "Street Lighting",
+      "expected_severity": null,
+      "supported_facts": ["street light not working", "near school", "two weeks", "dangerous at night"],
+      "must_not_invent": ["pothole", "specific accident", "exact location beyond 'near school'"]
+    },
+    {
+      "id": "EN-SPELL-02",
+      "language": "en",
+      "input_type": "spelling_error",
+      "input": "big potole on main raod, cars keep swerving to avoyd it, been ther for weeks",
+      "expected_category": "Roads and Potholes",
+      "expected_severity": null,
+      "supported_facts": ["pothole", "main road", "cars swerving to avoid it", "present for weeks"],
+      "must_not_invent": ["accident occurred", "number of cars affected", "pothole depth"]
+    },
+    {
+      "id": "EN-SPELL-03",
+      "language": "en",
+      "input_type": "spelling_error",
+      "input": "garbge not collcted in our aera since last munday, smellls really bad now",
+      "expected_category": "Sanitation and Waste",
+      "expected_severity": null,
+      "supported_facts": ["garbage not collected", "since last Monday", "bad smell"],
+      "must_not_invent": ["exact street name", "rodent problem", "number of bins"]
+    },
+    {
+      "id": "HI-SPELL-01",
+      "language": "hi",
+      "input_type": "spelling_error",
+      "input": "sadak par bahut bda gadda h, gadi palt sakti h, jaldi thik karo",
+      "expected_category": "Roads and Potholes",
+      "expected_severity": null,
+      "supported_facts": ["large pothole on road", "risk of a vehicle overturning", "urgent request"],
+      "must_not_invent": ["an accident already happened", "specific road name", "vehicle type involved"]
+    },
+    {
+      "id": "HI-SPELL-02",
+      "language": "hi",
+      "input_type": "spelling_error",
+      "input": "pani ki supply 4 din se band h hamare ilake m, bahut pareshani ho rhi h",
+      "expected_category": "Water Supply",
+      "expected_severity": null,
+      "supported_facts": ["water supply stopped", "four days", "in the area", "residents distressed"],
+      "must_not_invent": ["cause of the stoppage", "number of households affected"]
+    },
+    {
+      "id": "HI-SPELL-03",
+      "language": "hi",
+      "input_type": "spelling_error",
+      "input": "stret lite kharb h humari gli me, kaii din se andhera rehta h",
+      "expected_category": "Street Lighting",
+      "expected_severity": null,
+      "supported_facts": ["street light broken", "in our lane", "dark for many days"],
+      "must_not_invent": ["security incident", "exact lane name", "number of lights"]
+    },
+    {
+      "id": "BN-SPELL-01",
+      "language": "bn",
+      "input_type": "spelling_error",
+      "input": "রাস্তায় বরো গর্ত আছে, গারি উল্টে যেতে পারে, তারাতারি ঠিক করুন",
+      "expected_category": "Roads and Potholes",
+      "expected_severity": null,
+      "supported_facts": ["large pothole on road", "risk of a vehicle overturning", "urgent request"],
+      "must_not_invent": ["an accident already occurred", "exact street name", "how long it has existed"]
+    },
+    {
+      "id": "BN-SPELL-02",
+      "language": "bn",
+      "input_type": "spelling_error",
+      "input": "জল সাপলাই তিন দিন যাবত বন্দ আছে আমাদের এলাকায়, খুব কষ্ট হচ্ছে",
+      "expected_category": "Water Supply",
+      "expected_severity": null,
+      "supported_facts": ["water supply stopped", "three days", "in our area", "residents in distress"],
+      "must_not_invent": ["cause of the stoppage", "specific area name", "number of homes affected"]
+    },
+    {
+      "id": "BN-SPELL-03",
+      "language": "bn",
+      "input_type": "spelling_error",
+      "input": "রাস্তার বাতি কয়েক দিন ধরে নস্ট, রাত্রে অন্দকার থাকে খুব",
+      "expected_category": "Street Lighting",
+      "expected_severity": null,
+      "supported_facts": ["street light broken", "several days", "very dark at night"],
+      "must_not_invent": ["safety incident", "exact street name", "number of lights out"]
+    },
+    {
+      "id": "HI-TRANS-01",
+      "language": "hi",
+      "input_type": "transliteration",
+      "input": "hamare area mein kai dino se safai nahi hui hai, kachra bahut jama ho gaya hai",
+      "expected_category": "Sanitation and Waste",
+      "expected_severity": null,
+      "supported_facts": ["no cleaning for several days", "garbage has accumulated a lot"],
+      "must_not_invent": ["specific area name", "health hazard confirmed", "exact quantity"]
+    },
+    {
+      "id": "HI-TRANS-02",
+      "language": "hi",
+      "input_type": "transliteration",
+      "input": "school ke pass wali sadak bahut kharab hai, gaddo ki wajah se bachon ko chalne me dikkat hoti hai",
+      "expected_category": "Roads and Potholes",
+      "expected_severity": null,
+      "supported_facts": ["road near school in bad condition", "potholes", "difficulty for children walking"],
+      "must_not_invent": ["a specific injury", "exact school name", "number of potholes"]
+    },
+    {
+      "id": "BN-TRANS-01",
+      "language": "bn",
+      "input_type": "transliteration",
+      "input": "amader elakay onek din dhore safai hoyni, rastay ময়লা জমে গেছে",
+      "expected_category": "Sanitation and Waste",
+      "expected_severity": null,
+      "supported_facts": ["no cleaning for a long time", "garbage accumulated on the road"],
+      "must_not_invent": ["specific area name", "health issue reported", "exact days count"]
+    },
+    {
+      "id": "BN-TRANS-02",
+      "language": "bn",
+      "input_type": "transliteration",
+      "input": "market er kache পানির পাইপ ফেটে গেছে, rastay jol jome ache",
+      "expected_category": "Water Supply",
+      "expected_severity": null,
+      "supported_facts": ["water pipe burst near the market", "water pooling on the road"],
+      "must_not_invent": ["duration of the leak", "contamination", "affected shop count"]
+    },
+    {
+      "id": "EN-INC-01",
+      "language": "en",
+      "input_type": "incomplete_word",
+      "input": "pothole near sch... very dang, plz fix",
+      "expected_category": null,
+      "expected_severity": null,
+      "supported_facts": ["pothole", "near a school (implied)"],
+      "must_not_invent": ["exact location", "specific danger caused", "duration"]
+    },
+    {
+      "id": "HI-INC-01",
+      "language": "hi",
+      "input_type": "incomplete_word",
+      "input": "sadak me bda sa ga... bahut khatarnak h",
+      "expected_category": null,
+      "expected_severity": null,
+      "supported_facts": ["something large on the road (likely a pothole, word is incomplete)", "described as very dangerous"],
+      "must_not_invent": ["confirmed pothole", "exact road name", "specific incident"]
+    },
+    {
+      "id": "BN-INC-01",
+      "language": "bn",
+      "input_type": "incomplete_word",
+      "input": "রাস্তায় বড় গ... আছে, খুব বিপজ্জ...",
+      "expected_category": null,
+      "expected_severity": null,
+      "supported_facts": ["something large on the road (word incomplete)", "described as dangerous (word incomplete)"],
+      "must_not_invent": ["confirmed pothole", "exact street name", "specific incident"]
+    },
+    {
+      "id": "EN-INC-02",
+      "language": "en",
+      "input_type": "incomplete_word",
+      "input": "water pro... near mkt, urgnt",
+      "expected_category": null,
+      "expected_severity": null,
+      "supported_facts": ["a water-related problem (word incomplete)", "near the market", "urgent"],
+      "must_not_invent": ["burst pipe confirmed", "flooding confirmed", "exact market name"]
+    },
+    {
+      "id": "EN-COLLOQ-01",
+      "language": "en",
+      "input_type": "colloquial",
+      "input": "yo this road is a mess man, been like this forever, someone's gonna get hurt fr",
+      "expected_category": "Roads and Potholes",
+      "expected_severity": null,
+      "supported_facts": ["road is in poor condition", "long-standing problem", "concern about injury"],
+      "must_not_invent": ["an injury has occurred", "exact road name", "specific defect type"]
+    },
+    {
+      "id": "HI-COLLOQ-01",
+      "language": "hi",
+      "input_type": "colloquial",
+      "input": "bhai sadak ka to bura haal hai, kab se yehi condition hai, koi dekhta hi nahi",
+      "expected_category": "Roads and Potholes",
+      "expected_severity": null,
+      "supported_facts": ["road is in poor condition", "long-standing issue", "no action taken so far"],
+      "must_not_invent": ["exact road name", "specific defect (pothole vs cracks)", "duration in days/weeks"]
+    },
+    {
+      "id": "BN-COLLOQ-01",
+      "language": "bn",
+      "input_type": "colloquial",
+      "input": "দাদা রাস্তার যা অবস্থা, কতদিন ধরে এরকম পড়ে আছে, কেউ দেখেই না",
+      "expected_category": "Roads and Potholes",
+      "expected_severity": null,
+      "supported_facts": ["road is in poor condition", "long-standing issue", "no one has addressed it"],
+      "must_not_invent": ["exact road name", "specific defect type", "duration in days/weeks"]
+    },
+    {
+      "id": "EN-COLLOQ-02",
+      "language": "en",
+      "input_type": "colloquial",
+      "input": "lights out again on our street lol, third time this month, kinda sketchy at night ngl",
+      "expected_category": "Street Lighting",
+      "expected_severity": null,
+      "supported_facts": ["streetlights not working", "recurring issue (third time this month)", "feels unsafe at night"],
+      "must_not_invent": ["exact street name", "cause of the outage", "specific incident"]
+    },
+    {
+      "id": "MIX-01",
+      "language": "hi",
+      "input_type": "mixed_language",
+      "input": "Our area mein pichhle hafte se garbage collection nahi hua, bohot smell aa rahi hai",
+      "expected_category": "Sanitation and Waste",
+      "expected_severity": null,
+      "supported_facts": ["no garbage collection for the past week", "bad smell"],
+      "must_not_invent": ["exact area name", "health complaints", "specific bin count"]
+    },
+    {
+      "id": "MIX-02",
+      "language": "bn",
+      "input_type": "mixed_language",
+      "input": "School er samne road ta pura bhanga, bachader jete problem hocche every day",
+      "expected_category": "Roads and Potholes",
+      "expected_severity": null,
+      "supported_facts": ["road in front of school badly damaged", "children have difficulty every day"],
+      "must_not_invent": ["exact school name", "specific injury", "how long it has been broken"]
+    },
+    {
+      "id": "MIX-03",
+      "language": "en",
+      "input_type": "mixed_language",
+      "input": "Bijli ka connection bar bar trip ho raha hai humare gali mein, please check karo",
+      "expected_category": "Electricity",
+      "expected_severity": null,
+      "supported_facts": ["electricity connection tripping repeatedly", "in our lane"],
+      "must_not_invent": ["cause of the tripping", "exact lane name", "number of affected homes"]
+    },
+    {
+      "id": "EN-SHORT-01",
+      "language": "en",
+      "input_type": "short",
+      "input": "No water since morning.",
+      "expected_category": "Water Supply",
+      "expected_severity": null,
+      "supported_facts": ["no water", "since this morning"],
+      "must_not_invent": ["cause", "location", "number of affected households"]
+    },
+    {
+      "id": "HI-SHORT-01",
+      "language": "hi",
+      "input_type": "short",
+      "input": "बिजली नहीं है सुबह से।",
+      "expected_category": "Electricity",
+      "expected_severity": null,
+      "supported_facts": ["no electricity", "since morning"],
+      "must_not_invent": ["cause", "location", "number of affected households"]
+    },
+    {
+      "id": "BN-SHORT-01",
+      "language": "bn",
+      "input_type": "short",
+      "input": "রাস্তায় গর্ত, বিপজ্জনক।",
+      "expected_category": "Roads and Potholes",
+      "expected_severity": null,
+      "supported_facts": ["pothole on road", "described as dangerous"],
+      "must_not_invent": ["exact location", "cause", "duration"]
+    },
+    {
+      "id": "EN-SHORT-02",
+      "language": "en",
+      "input_type": "short",
+      "input": "Street light broken.",
+      "expected_category": "Street Lighting",
+      "expected_severity": null,
+      "supported_facts": ["street light broken"],
+      "must_not_invent": ["exact location", "duration", "cause"]
+    },
+    {
+      "id": "EN-AMB-01",
+      "language": "en",
+      "input_type": "ambiguous",
+      "input": "Something is wrong near the school.",
+      "expected_category": null,
+      "expected_severity": null,
+      "supported_facts": ["a problem exists near a school"],
+      "must_not_invent": ["pothole", "waterlogging", "broken road", "streetlight", "exact location", "cause"]
+    },
+    {
+      "id": "HI-AMB-01",
+      "language": "hi",
+      "input_type": "ambiguous",
+      "input": "स्कूल के पास कुछ दिक्कत है।",
+      "expected_category": null,
+      "expected_severity": null,
+      "supported_facts": ["a problem exists near a school"],
+      "must_not_invent": ["gadda", "pani", "sadak toot gayi", "exact location", "cause"]
+    },
+    {
+      "id": "BN-AMB-01",
+      "language": "bn",
+      "input_type": "ambiguous",
+      "input": "স্কুলের কাছে কিছু সমস্যা",
+      "expected_category": null,
+      "expected_severity": null,
+      "supported_facts": [],
+      "must_not_invent": ["pothole", "waterlogging", "broken road", "exact location", "cause"]
+    },
+    {
+      "id": "EN-AMB-02",
+      "language": "en",
+      "input_type": "ambiguous",
+      "input": "There's an issue in our area, please look into it.",
+      "expected_category": null,
+      "expected_severity": null,
+      "supported_facts": ["an unspecified issue exists in the citizen's area"],
+      "must_not_invent": ["category of the issue", "location detail", "severity", "cause"]
+    },
+    {
+      "id": "HI-AMB-02",
+      "language": "hi",
+      "input_type": "ambiguous",
+      "input": "यहाँ कुछ ठीक नहीं है, कोई आकर देखे।",
+      "expected_category": null,
+      "expected_severity": null,
+      "supported_facts": ["something is not right at the citizen's location"],
+      "must_not_invent": ["category", "specific defect", "location detail"]
+    },
+    {
+      "id": "BN-AMB-02",
+      "language": "bn",
+      "input_type": "ambiguous",
+      "input": "এখানে কিছু একটা সমস্যা হচ্ছে।",
+      "expected_category": null,
+      "expected_severity": null,
+      "supported_facts": ["some unspecified problem is occurring"],
+      "must_not_invent": ["category", "specific defect", "location detail"]
+    },
+    {
+      "id": "EN-INSUF-01",
+      "language": "en",
+      "input_type": "insufficient_info",
+      "input": "Please help us.",
+      "expected_category": null,
+      "expected_severity": null,
+      "supported_facts": [],
+      "must_not_invent": ["any category", "any location", "any severity", "any cause"]
+    },
+    {
+      "id": "HI-INSUF-01",
+      "language": "hi",
+      "input_type": "insufficient_info",
+      "input": "कृपया मदद करें।",
+      "expected_category": null,
+      "expected_severity": null,
+      "supported_facts": [],
+      "must_not_invent": ["any category", "any location", "any severity", "any cause"]
+    },
+    {
+      "id": "BN-INSUF-01",
+      "language": "bn",
+      "input_type": "insufficient_info",
+      "input": "অনুগ্রহ করে সাহায্য করুন।",
+      "expected_category": null,
+      "expected_severity": null,
+      "supported_facts": [],
+      "must_not_invent": ["any category", "any location", "any severity", "any cause"]
+    },
+    {
+      "id": "EN-INSUF-02",
+      "language": "en",
+      "input_type": "insufficient_info",
+      "input": "This is bad.",
+      "expected_category": null,
+      "expected_severity": null,
+      "supported_facts": [],
+      "must_not_invent": ["any category", "any location", "any severity", "any cause"]
+    },
+    {
+      "id": "HI-INSUF-02",
+      "language": "hi",
+      "input_type": "insufficient_info",
+      "input": "ठीक नहीं है सब कुछ।",
+      "expected_category": null,
+      "expected_severity": null,
+      "supported_facts": [],
+      "must_not_invent": ["any category", "any location", "any severity", "any cause"]
+    },
+    {
+      "id": "BN-INSUF-02",
+      "language": "bn",
+      "input_type": "insufficient_info",
+      "input": "সব ঠিক নেই।",
+      "expected_category": null,
+      "expected_severity": null,
+      "supported_facts": [],
+      "must_not_invent": ["any category", "any location", "any severity", "any cause"]
+    }
+  ]
+}
