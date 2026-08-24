@@ -125,6 +125,125 @@
      focus style, unchanged). Uses the existing Action Blue -- no new
      color introduced. */
   --focus-ring: 0 0 0 2px var(--color-surface-container-lowest), 0 0 0 4px var(--color-action);
+
+  /* --- Accessibility widget (Milestone 25.9) --------------------------------
+     A single multiplier applied to body font-size via the accessibility
+     panel. 1 = default. Persisted in localStorage by theme.js. */
+  --a11y-font-scale: 1;
+}
+
+/* ============================================================================
+   Dark theme (Milestone 25.9)
+   A genuine, intentional dark palette -- not an inverted light theme.
+   Every token below is a deliberate choice for that surface in the dark
+   context, keeping the same Civic Blue/Action Blue identity. Applied via
+   [data-theme="dark"] on <html> (set by theme.js, persisted in
+   localStorage, falling back to the OS preference when the citizen/
+   authority user hasn't explicitly chosen one yet).
+   ============================================================================ */
+
+[data-theme='dark'] {
+  --color-surface: #0b1220;
+  --color-surface-dim: #0b1220;
+  --color-surface-bright: #101a2e;
+  --color-surface-container-lowest: #101a2e;
+  --color-surface-container-low: #131e35;
+  --color-surface-container: #17233d;
+  --color-surface-container-high: #1c2a47;
+  --color-surface-container-highest: #223151;
+  --color-on-surface: #e7ecf7;
+  --color-on-surface-variant: #a7b3cc;
+  --color-inverse-surface: #e7ecf7;
+  --color-inverse-on-surface: #131e35;
+  --color-outline: #4a5772;
+  --color-outline-variant: #2b3752;
+
+  --color-primary: #060b16;
+  --color-on-primary: #e7ecf7;
+  --color-primary-container: #101a2e;
+  --color-on-primary-container: #a7b3cc;
+
+  --color-secondary: #a7b3cc;
+  --color-on-secondary: #0b1220;
+  --color-secondary-container: #223151;
+  --color-on-secondary-container: #c3cee6;
+
+  --color-action: #6ea8ff; /* lightened Action Blue -- keeps AA contrast on dark surfaces */
+  --color-tertiary-container: #0d1f3f;
+  --color-on-tertiary-container: #7fa6ff;
+
+  --color-error: #ff8a80;
+  --color-on-error: #4c0004;
+  --color-error-container: #5c1a17;
+  --color-on-error-container: #ffdad6;
+
+  --color-success: #7fd99a;
+  --color-success-container: #163d24;
+  --color-warning: #f0c05a;
+  --color-warning-container: #40300a;
+
+  --color-background: #0b1220;
+  --color-on-background: #e7ecf7;
+  --color-card-border: #223151;
+  --color-card-header-border: #1c2a47;
+
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.35), 0 1px 1px 0 rgb(0 0 0 / 0.25);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.45), 0 2px 4px -2px rgb(0 0 0 / 0.35);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.55), 0 4px 6px -4px rgb(0 0 0 / 0.4);
+  --shadow-subtle: var(--shadow-sm);
+
+  --focus-ring: 0 0 0 2px var(--color-surface-container-lowest), 0 0 0 4px var(--color-action);
+}
+
+/* Only follow the OS preference when the user has never explicitly
+   chosen a theme in this browser -- theme.js adds data-theme-explicit
+   to <html> the moment a citizen/authority user picks one, which
+   disables this fallback block entirely via the attribute selector
+   below never matching once that's present. */
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme-explicit]) {
+    --color-surface: #0b1220;
+    --color-surface-dim: #0b1220;
+    --color-surface-bright: #101a2e;
+    --color-surface-container-lowest: #101a2e;
+    --color-surface-container-low: #131e35;
+    --color-surface-container: #17233d;
+    --color-surface-container-high: #1c2a47;
+    --color-surface-container-highest: #223151;
+    --color-on-surface: #e7ecf7;
+    --color-on-surface-variant: #a7b3cc;
+    --color-inverse-surface: #e7ecf7;
+    --color-inverse-on-surface: #131e35;
+    --color-outline: #4a5772;
+    --color-outline-variant: #2b3752;
+    --color-primary: #060b16;
+    --color-on-primary: #e7ecf7;
+    --color-primary-container: #101a2e;
+    --color-on-primary-container: #a7b3cc;
+    --color-secondary: #a7b3cc;
+    --color-on-secondary: #0b1220;
+    --color-secondary-container: #223151;
+    --color-on-secondary-container: #c3cee6;
+    --color-action: #6ea8ff;
+    --color-tertiary-container: #0d1f3f;
+    --color-on-tertiary-container: #7fa6ff;
+    --color-error: #ff8a80;
+    --color-on-error: #4c0004;
+    --color-error-container: #5c1a17;
+    --color-on-error-container: #ffdad6;
+    --color-success: #7fd99a;
+    --color-success-container: #163d24;
+    --color-warning: #f0c05a;
+    --color-warning-container: #40300a;
+    --color-background: #0b1220;
+    --color-on-background: #e7ecf7;
+    --color-card-border: #223151;
+    --color-card-header-border: #1c2a47;
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.35), 0 1px 1px 0 rgb(0 0 0 / 0.25);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.45), 0 2px 4px -2px rgb(0 0 0 / 0.35);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.55), 0 4px 6px -4px rgb(0 0 0 / 0.4);
+    --shadow-subtle: var(--shadow-sm);
+  }
 }
 
 /* ============================================================================
@@ -144,12 +263,35 @@ html {
 body {
   margin: 0;
   font-family: var(--font-family);
-  font-size: var(--body-md-size);
+  font-size: calc(var(--body-md-size) * var(--a11y-font-scale));
   line-height: var(--body-md-line);
   font-weight: var(--body-md-weight);
   color: var(--color-on-surface);
   background: var(--color-background);
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+/* Reduced motion (Milestone 25.9): respects the OS-level preference
+   automatically, and can also be forced on via the accessibility
+   widget (data-reduced-motion="true" on <html>, persisted by
+   theme.js) for a user whose OS setting doesn't reflect their actual
+   preference in this browser. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+html[data-reduced-motion='true'] *,
+html[data-reduced-motion='true'] *::before,
+html[data-reduced-motion='true'] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
 }
 
 img,

@@ -9,7 +9,7 @@
 /* --- Citizen top navigation -------------------------------------------------- */
 
 .site-header {
-  background: #ffffff;
+  background: var(--color-surface-container-lowest);
   border-bottom: 1px solid var(--color-card-border);
   box-shadow: var(--shadow-sm);
 }
@@ -115,23 +115,48 @@
     align-items: center;
     justify-content: center;
   }
-  /* Collapsed by default on mobile -- a real drawer, not the nav
-     simply wrapping below the brand. The full nav, language switcher,
-     and Authority Portal button appear together when the hamburger is
-     tapped, and stack vertically for easy tapping. */
+
+  /* Genuine overlay drawer (Milestone 25.9), not an inline push-down
+     panel: fixed to the viewport, slides from the right, with its own
+     backdrop. Closed by default; opened via .is-nav-open on
+     .site-header__inner (JS in utils.js also locks body scroll and
+     handles Escape/backdrop-click while open). */
   .site-nav-collapsible {
-    display: none;
-    width: 100%;
+    display: flex;
     flex-direction: column;
     align-items: stretch;
     gap: var(--space-md);
-    margin-top: var(--space-sm);
-    padding-top: var(--space-md);
-    border-top: 1px solid var(--color-card-border);
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(320px, 85vw);
+    padding: calc(var(--space-lg) + env(safe-area-inset-top)) var(--space-lg) var(--space-lg);
+    background: var(--color-surface-container-lowest);
+    box-shadow: var(--shadow-lg);
+    transform: translateX(100%);
+    transition: transform 0.2s ease;
+    z-index: 60;
+    overflow-y: auto;
   }
   .site-header__inner.is-nav-open .site-nav-collapsible {
-    display: flex;
+    transform: translateX(0);
   }
+  html[data-reduced-motion='true'] .site-nav-collapsible {
+    transition: none;
+  }
+
+  .nav-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 55;
+  }
+  .site-header__inner.is-nav-open .nav-backdrop {
+    display: block;
+  }
+
   .site-header__inner {
     flex-wrap: wrap;
   }
@@ -141,17 +166,166 @@
     gap: var(--space-sm);
   }
   .site-nav a {
-    padding: 6px 0;
+    padding: 8px 0;
     font-size: 15px;
   }
-  .language-switcher {
-    margin-left: 0;
+  .lang-dropdown {
+    width: 100%;
+  }
+  .lang-dropdown__trigger {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .lang-dropdown__menu {
+    position: static;
+    box-shadow: none;
+    border: 1px solid var(--color-card-border);
+    margin-top: var(--space-xs);
+  }
+  .theme-toggle {
+    align-self: flex-start;
   }
   .site-header__authority-btn {
     width: 100%;
     text-align: center;
     justify-content: center;
   }
+}
+
+/* --- Icons (Milestone 25.9) -------------------------------------------------- */
+
+.icon {
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* --- Language dropdown (Milestone 25.9) --------------------------------------
+   Replaces the old three-separate-buttons switcher. Reuses the exact
+   same [data-language-option] elements/click-wiring from i18n.js --
+   only the surrounding trigger/popover chrome is new. */
+.lang-dropdown {
+  position: relative;
+}
+.lang-dropdown__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-default);
+  padding: 7px 12px;
+  min-height: 40px;
+  font-size: var(--body-sm-size);
+  font-weight: 600;
+  color: var(--color-on-surface);
+  cursor: pointer;
+}
+.lang-dropdown__trigger:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.lang-dropdown__trigger[aria-expanded='true'] .icon--chevron {
+  transform: rotate(180deg);
+}
+.icon--chevron {
+  transition: transform 0.15s ease;
+}
+html[data-reduced-motion='true'] .icon--chevron {
+  transition: none;
+}
+
+.lang-dropdown__menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 180px;
+  background: var(--color-surface-container-lowest);
+  border: 1px solid var(--color-card-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-sm);
+  z-index: 70;
+}
+.lang-dropdown__heading {
+  font-size: var(--label-md-size);
+  font-weight: var(--label-md-weight);
+  letter-spacing: var(--label-md-tracking);
+  text-transform: uppercase;
+  color: var(--color-on-surface-variant);
+  padding: 4px var(--space-sm) 8px;
+  margin: 0;
+  border-bottom: 1px solid var(--color-card-header-border);
+  margin-bottom: 4px;
+}
+.lang-dropdown__menu button[data-language-option] {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-default);
+  padding: 8px var(--space-sm);
+  font-size: var(--body-sm-size);
+  color: var(--color-on-surface);
+  text-align: left;
+  cursor: pointer;
+  min-height: 40px;
+}
+.lang-dropdown__menu button[data-language-option]:hover {
+  background: var(--color-surface-container-low);
+}
+.lang-dropdown__menu button[data-language-option]:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.lang-dropdown__check {
+  width: 14px;
+  color: var(--color-action);
+  opacity: 0;
+}
+.lang-dropdown__menu button[data-language-option].is-active .lang-dropdown__check {
+  opacity: 1;
+}
+.lang-dropdown__menu button[data-language-option].is-active {
+  font-weight: 600;
+}
+
+/* --- Theme toggle (Milestone 25.9) -------------------------------------------- */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  min-width: 44px;
+  min-height: 44px;
+  background: transparent;
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-default);
+  color: var(--color-on-surface);
+  cursor: pointer;
+}
+.theme-toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* The authority sidebar is always a dark surface (its own --color-primary
+   background, independent of the page's light/dark theme), so its
+   theme-toggle needs light-on-dark colors always -- matching the
+   existing convention for other sidebar text (e.g. .authority-nav a). */
+.theme-toggle--sidebar {
+  width: auto;
+  height: auto;
+  min-height: 40px;
+  padding: 8px 12px;
+  gap: var(--space-sm);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+  font-size: var(--body-sm-size);
+  font-weight: 600;
+  justify-content: flex-start;
 }
 
 .site-footer {
@@ -279,7 +453,7 @@
 /* --- Cards --------------------------------------------------------------- */
 
 .card {
-  background: #ffffff;
+  background: var(--color-surface-container-lowest);
   border: 1px solid var(--color-card-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
@@ -328,7 +502,7 @@
   padding: var(--space-sm) var(--space-md);
   font-size: var(--body-md-size);
   color: var(--color-on-surface);
-  background: #ffffff;
+  background: var(--color-surface-container-lowest);
   resize: vertical;
 }
 
@@ -666,7 +840,7 @@
 }
 
 .kpi-card {
-  background: #ffffff;
+  background: var(--color-surface-container-lowest);
   border: 1px solid var(--color-card-border);
   border-radius: var(--radius-lg);
   padding: var(--space-md);
@@ -696,4 +870,136 @@
   font-size: 32px;
   font-weight: 700;
   color: var(--color-on-surface);
+}
+
+/* --- Floating accessibility widget (Milestone 25.9) --------------------------
+   Bottom-left, persistent, 44px minimum touch target. Respects safe-area
+   insets for notched/gesture-bar devices. */
+.a11y-widget {
+  position: fixed;
+  left: max(16px, env(safe-area-inset-left));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 80;
+}
+
+@media (max-width: 480px) {
+  /* Milestone 25.9 (revised): JS in utils.js continuously checks
+     whether either widget's actual on-screen position would overlap a
+     real control/label/link anywhere on the page, for the citizen's
+     current scroll position -- not just at page load. A widget that
+     would collide gets .is-collision-hidden and is faded out and made
+     non-interactive until it's clear again. This is a general,
+     content-independent fix rather than page-specific spacing tuned to
+     dodge one particular layout. */
+  .a11y-widget.is-collision-hidden,
+  .contact-widget.is-collision-hidden {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+  }
+  html[data-reduced-motion='true'] .a11y-widget.is-collision-hidden,
+  html[data-reduced-motion='true'] .contact-widget.is-collision-hidden {
+    transition: none;
+  }
+}
+.a11y-widget__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-full);
+  background: var(--color-action);
+  color: #ffffff;
+  border: none;
+  box-shadow: var(--shadow-lg);
+  cursor: pointer;
+}
+.a11y-widget__toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-lg), var(--focus-ring);
+}
+.a11y-widget__panel {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 0;
+  width: 260px;
+  background: var(--color-surface-container-lowest);
+  border: 1px solid var(--color-card-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-md);
+}
+.a11y-widget__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm) 0;
+  font-size: var(--body-sm-size);
+}
+.a11y-widget__row + .a11y-widget__row {
+  border-top: 1px solid var(--color-card-header-border);
+}
+.a11y-widget__stepper {
+  display: flex;
+  gap: 4px;
+}
+.a11y-widget__stepper button {
+  min-width: 40px;
+  min-height: 36px;
+  border: 1px solid var(--color-outline-variant);
+  background: transparent;
+  color: var(--color-on-surface);
+  border-radius: var(--radius-default);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.a11y-widget__stepper button:focus-visible,
+.a11y-widget__row input[type='checkbox']:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.a11y-widget__row input[type='checkbox'] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--color-action);
+}
+
+/* --- Floating contact widget (Milestone 25.9) --------------------------------
+   Bottom-right, a real mailto link (not a fake live-chat system). */
+.contact-widget {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 80;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  color: #ffffff;
+  box-shadow: var(--shadow-lg);
+  text-decoration: none;
+}
+.contact-widget:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-lg), var(--focus-ring);
+}
+
+/* On narrow phones, keep the floating widgets from ever overlapping the
+   citizen's primary form controls by giving the page a bit of bottom
+   breathing room. */
+@media (max-width: 480px) {
+  .a11y-widget__panel {
+    width: min(260px, 78vw);
+  }
+  .a11y-widget__toggle,
+  .contact-widget {
+    width: 44px;
+    height: 44px;
+  }
 }

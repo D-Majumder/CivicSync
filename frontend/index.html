@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/static/css/tokens.css" />
   <link rel="stylesheet" href="/static/css/components.css" />
   <link rel="stylesheet" href="/static/css/pages.css" />
+  <script src="/static/js/theme.js"></script>
 </head>
 <body>
   <div class="page-shell">
@@ -23,10 +24,19 @@
           type="button"
           class="site-header__nav-toggle"
           id="citizen-nav-toggle"
-          aria-label="Menu"
+          aria-label="Open menu"
           aria-expanded="false"
           aria-controls="citizen-nav-collapsible"
-        >☰</button>
+        >
+          <svg class="icon icon--menu" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          <svg class="icon icon--close" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true" hidden>
+            <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+        </button>
+
+        <div class="nav-backdrop" id="citizen-nav-backdrop" hidden></div>
 
         <div class="site-nav-collapsible" id="citizen-nav-collapsible">
           <nav class="site-nav" aria-label="Primary">
@@ -34,12 +44,42 @@
             <a href="/track" data-i18n="nav_track">Track Status</a>
             <a href="#" class="is-disabled" aria-disabled="true" tabindex="-1" title="Coming in a future milestone" data-i18n="nav_impact_map">Impact Map</a>
           </nav>
-          <span class="language-switcher" aria-label="Language">
-            <span class="language-switcher__label" aria-hidden="true">🌐</span>
-            <button type="button" data-language-option="en" aria-label="English">EN</button>
-            <button type="button" data-language-option="hi" aria-label="हिन्दी">हिं</button>
-            <button type="button" data-language-option="bn" aria-label="বাংলা">বাং</button>
-          </span>
+
+          <div class="lang-dropdown" id="lang-dropdown">
+            <button type="button" class="lang-dropdown__trigger" id="lang-dropdown-trigger" aria-haspopup="true" aria-expanded="false" aria-controls="lang-dropdown-menu">
+              <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" />
+                <path d="M3 12h18M12 3c2.5 2.7 2.5 15.3 0 18M12 3c-2.5 2.7-2.5 15.3 0 18" stroke="currentColor" stroke-width="1.6" />
+              </svg>
+              <span id="lang-dropdown-current" data-i18n="lang_name_en">English</span>
+              <svg class="icon icon--chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+            <div class="lang-dropdown__menu" id="lang-dropdown-menu" role="menu" hidden>
+              <p class="lang-dropdown__heading" data-i18n="lang_menu_heading">Language</p>
+              <button type="button" role="menuitemradio" data-language-option="en" aria-label="English">
+                <span class="lang-dropdown__check" aria-hidden="true">✓</span> English
+              </button>
+              <button type="button" role="menuitemradio" data-language-option="hi" aria-label="हिन्दी">
+                <span class="lang-dropdown__check" aria-hidden="true">✓</span> हिंदी
+              </button>
+              <button type="button" role="menuitemradio" data-language-option="bn" aria-label="বাংলা">
+                <span class="lang-dropdown__check" aria-hidden="true">✓</span> বাংলা
+              </button>
+            </div>
+          </div>
+
+          <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch to dark mode" aria-pressed="false">
+            <svg class="icon icon--sun" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.8" />
+              <path d="M12 2.5v2.5M12 19v2.5M4.4 4.4l1.8 1.8M17.8 17.8l1.8 1.8M2.5 12H5M19 12h2.5M4.4 19.6l1.8-1.8M17.8 6.2l1.8-1.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+            <svg class="icon icon--moon" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" hidden>
+              <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+            </svg>
+          </button>
+
           <a href="/authority/login" class="btn btn-secondary site-header__authority-btn" data-i18n="nav_authority_portal">Authority Portal</a>
         </div>
       </div>
@@ -261,6 +301,45 @@
       </div>
     </footer>
   </div>
+
+  <!-- Floating accessibility control (Milestone 25.9): every option
+       here genuinely affects the page and persists via theme.js --
+       no decorative/inert controls. -->
+  <div class="a11y-widget" id="a11y-widget">
+    <button type="button" class="a11y-widget__toggle" id="a11y-widget-toggle" aria-haspopup="true" aria-expanded="false" aria-controls="a11y-widget-panel" aria-label="Accessibility options">
+      <svg class="icon" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="4.5" r="1.8" fill="currentColor" />
+        <path d="M4 8.5c3.5 1.2 12.5 1.2 16 0M12 10v10M12 14l-3.5 6M12 14l3.5 6M9 10l-1.5 5M15 10l1.5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+    </button>
+    <div class="a11y-widget__panel" id="a11y-widget-panel" role="dialog" aria-label="Accessibility options" hidden>
+      <div class="a11y-widget__row">
+        <span data-i18n="a11y_text_size">Text size</span>
+        <div class="a11y-widget__stepper">
+          <button type="button" id="a11y-font-decrease" aria-label="Decrease text size">A−</button>
+          <button type="button" id="a11y-font-reset" aria-label="Reset text size">Reset</button>
+          <button type="button" id="a11y-font-increase" aria-label="Increase text size">A+</button>
+        </div>
+      </div>
+      <div class="a11y-widget__row">
+        <label for="a11y-dark-toggle" data-i18n="a11y_dark_mode">Dark mode</label>
+        <input type="checkbox" id="a11y-dark-toggle" />
+      </div>
+      <div class="a11y-widget__row">
+        <label for="a11y-motion-toggle" data-i18n="a11y_reduced_motion">Reduce motion</label>
+        <input type="checkbox" id="a11y-motion-toggle" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating contact control (Milestone 25.9): a real mailto link --
+       no fake live-chat/support backend. -->
+  <a class="contact-widget" href="mailto:support@civicsync.example" aria-label="Contact CivicSync support by email">
+    <svg class="icon" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.8" />
+      <path d="M3.5 6.5l8.5 6 8.5-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+  </a>
 
   <script src="/static/js/config.js"></script>
   <script src="/static/js/utils.js"></script>

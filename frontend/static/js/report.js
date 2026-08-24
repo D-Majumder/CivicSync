@@ -396,12 +396,12 @@
       departmentListEl.innerHTML = '';
       departments.forEach((dept) => {
         const li = document.createElement('li');
-        li.className = 'chip chip-neutral';
+        li.className = 'department-list__item';
         li.textContent = dept.name;
         departmentListEl.appendChild(li);
       });
     } catch (err) {
-      departmentListEl.innerHTML = '<li class="chip chip-neutral">Department list unavailable right now.</li>';
+      departmentListEl.innerHTML = '<li class="department-list__item">Department list unavailable right now.</li>';
     }
   }
 

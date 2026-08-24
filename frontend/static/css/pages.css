@@ -208,12 +208,23 @@
 }
 
 .department-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-sm);
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 2px var(--space-lg);
   list-style: none;
   padding: 0;
   margin: 0;
+}
+.department-list__item {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-card-header-border);
+  font-size: var(--body-sm-size);
+  color: var(--color-on-surface);
+}
+@media (max-width: 420px) {
+  .department-list {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* --- Tracking page ------------------------------------------------------------ */
@@ -268,7 +279,7 @@
    as a completed, positive action at a glance. */
 .resolution-panel {
   border-color: var(--color-success-container);
-  background: linear-gradient(180deg, var(--color-success-container) 0%, #ffffff 72px);
+  background: linear-gradient(180deg, var(--color-success-container) 0%, var(--color-surface-container-lowest) 72px);
 }
 .resolution-panel .card__header {
   border-bottom-color: var(--color-success-container);
@@ -280,7 +291,7 @@
    official information. */
 .reopen-panel {
   border-color: var(--color-warning-container);
-  background: linear-gradient(180deg, var(--color-warning-container) 0%, #ffffff 72px);
+  background: linear-gradient(180deg, var(--color-warning-container) 0%, var(--color-surface-container-lowest) 72px);
 }
 .reopen-panel .card__header {
   border-bottom-color: var(--color-warning-container);
@@ -375,7 +386,7 @@
   align-items: baseline;
   gap: 4px 8px;
   padding: var(--space-sm);
-  background: #ffffff;
+  background: var(--color-surface-container-lowest);
   border: 1px solid var(--color-success-container);
   border-radius: var(--radius-default);
   margin-bottom: var(--space-sm);
