@@ -57,7 +57,7 @@
 }
 
 .filter-field label {
-  font-size: 11px;
+  font-size: calc(11px * var(--a11y-font-scale));
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -99,7 +99,7 @@
   text-align: left;
   padding: var(--space-sm) var(--space-md);
   background: var(--color-surface-container-low);
-  font-size: 11px;
+  font-size: calc(11px * var(--a11y-font-scale));
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -254,7 +254,7 @@
 .department-card__stats strong {
   color: var(--color-on-surface);
   display: block;
-  font-size: 20px;
+  font-size: calc(20px * var(--a11y-font-scale));
 }
 
 /* --- Insight cards ---------------------------------------------------------------- */
@@ -306,7 +306,7 @@
   background: var(--color-surface-container-low);
   border-radius: var(--radius-default);
   padding: 2px var(--space-sm);
-  font-size: 12px;
+  font-size: calc(12px * var(--a11y-font-scale));
   color: var(--color-on-surface-variant);
   font-variant-numeric: tabular-nums;
 }
@@ -332,7 +332,7 @@
   background: rgba(255, 255, 255, 0.12);
   border-radius: var(--radius-full);
   padding: 2px var(--space-sm);
-  font-size: 11px;
+  font-size: calc(11px * var(--a11y-font-scale));
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -389,7 +389,7 @@
   border: none;
   background: transparent;
   cursor: pointer;
-  font-size: 20px;
+  font-size: calc(20px * var(--a11y-font-scale));
   line-height: 1;
   color: var(--color-on-surface-variant);
   padding: 4px 8px;
@@ -429,7 +429,7 @@
 }
 
 .detail-grid dt {
-  font-size: 11px;
+  font-size: calc(11px * var(--a11y-font-scale));
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -457,7 +457,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: calc(11px * var(--a11y-font-scale));
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -477,7 +477,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: calc(11px * var(--a11y-font-scale));
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;

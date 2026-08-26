@@ -6,6 +6,13 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  padding-top: var(--header-height);
+}
+
+@media (max-width: 860px) {
+  .page-shell {
+    padding-top: var(--header-height-mobile);
+  }
 }
 
 .page-main {
@@ -123,7 +130,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: calc(11px * var(--a11y-font-scale));
   color: transparent;
 }
 
@@ -153,13 +160,27 @@
 .result-icon {
   width: 72px;
   height: 72px;
-  border-radius: var(--radius-lg);
-  background: var(--color-primary);
+  border-radius: var(--radius-full);
+  background: var(--color-success);
   color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 auto var(--space-lg);
+  animation: result-icon-in 0.35s ease;
+}
+@keyframes result-icon-in {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+html[data-reduced-motion='true'] .result-icon {
+  animation: none;
 }
 
 .result-summary {
@@ -183,7 +204,7 @@
 }
 
 .result-id-value {
-  font-size: 22px;
+  font-size: calc(22px * var(--a11y-font-scale));
   font-weight: 700;
   letter-spacing: 0.02em;
 }
@@ -242,6 +263,12 @@
   border-radius: var(--radius-default);
   padding: var(--space-sm) var(--space-md);
   font-size: var(--body-md-size);
+  background: var(--color-surface-container-lowest);
+  color: var(--color-on-surface);
+}
+
+.track-search input::placeholder {
+  color: var(--color-on-surface-variant);
 }
 
 .track-search input:focus {
@@ -268,7 +295,7 @@
    on this page -- give its chip more visual weight than an ordinary
    inline status chip elsewhere, without introducing a new color. */
 .chip.chip-lg {
-  font-size: 14px;
+  font-size: calc(14px * var(--a11y-font-scale));
   padding: 6px 14px;
   font-weight: 700;
 }
@@ -409,7 +436,7 @@
   margin-left: 12px;
 }
 .language-switcher__label {
-  font-size: 14px;
+  font-size: calc(14px * var(--a11y-font-scale));
   color: var(--color-on-surface-variant);
   line-height: 1;
 }
@@ -419,7 +446,7 @@
   border-radius: var(--radius-full);
   padding: 5px 11px;
   min-height: 28px;
-  font-size: 12px;
+  font-size: calc(12px * var(--a11y-font-scale));
   font-weight: 600;
   color: var(--color-on-surface-variant);
   cursor: pointer;

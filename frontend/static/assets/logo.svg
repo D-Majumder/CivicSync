@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" role="img" aria-labelledby="civicsync-logo-title">
+  <title id="civicsync-logo-title">CivicSync</title>
+  <!-- Two arcs forming a synchronized loop around a central civic point:
+       civic connection (linked paths) and synchronization (the loop),
+       rendered in currentColor so it works on any background/theme
+       without separate light/dark asset files. -->
+  <path d="M24 6a18 18 0 1 1-12.73 5.27" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" fill="none"/>
+  <path d="M24 42a18 18 0 0 0 12.73-30.73" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" fill="none" opacity="0.45"/>
+  <path d="M11.2 5.6l0.1 6.7-6.7-0.4" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <circle cx="24" cy="24" r="5.2" fill="currentColor"/>
+</svg>

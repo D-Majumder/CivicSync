@@ -4,6 +4,18 @@
  * logic reused by report.js, track.js, and admin.js.
  */
 
+// --- Shared hidden-state helper (M27 bug-fix pass) -----------------------------
+// element.hidden = true/false does not reliably reflect to the actual
+// `hidden` DOM attribute on SVG elements in all browsers (confirmed:
+// the property silently diverges from the attribute), which is what
+// caused icon-swap bugs like both password eye icons appearing at
+// once. This works correctly for any element, HTML or SVG.
+function setElementHidden(el, isHidden) {
+  if (!el) return;
+  if (isHidden) el.setAttribute('hidden', '');
+  else el.removeAttribute('hidden');
+}
+
 const CivicSyncUtils = {
   /** severity value (e.g. "High") -> chip CSS class */
   severityChipClass(severity) {
@@ -118,12 +130,16 @@ window.CivicSyncUtils = CivicSyncUtils;
     return window.getComputedStyle(toggle).display !== 'none';
   }
 
+  function t(key, fallback) {
+    return window.CivicSyncI18n ? window.CivicSyncI18n.t(key) : fallback;
+  }
+
   function openDrawer() {
     headerInner.classList.add('is-nav-open');
     toggle.setAttribute('aria-expanded', 'true');
-    toggle.setAttribute('aria-label', 'Close menu');
-    if (menuIcon) menuIcon.hidden = true;
-    if (closeIcon) closeIcon.hidden = false;
+    toggle.setAttribute('aria-label', t('nav_close_menu', 'Close menu'));
+    setElementHidden(menuIcon, true);
+    setElementHidden(closeIcon, false);
     if (backdrop && isMobileDrawerActive()) {
       backdrop.hidden = false;
       document.body.style.overflow = 'hidden';
@@ -133,9 +149,9 @@ window.CivicSyncUtils = CivicSyncUtils;
   function closeDrawer() {
     headerInner.classList.remove('is-nav-open');
     toggle.setAttribute('aria-expanded', 'false');
-    toggle.setAttribute('aria-label', 'Open menu');
-    if (menuIcon) menuIcon.hidden = false;
-    if (closeIcon) closeIcon.hidden = true;
+    toggle.setAttribute('aria-label', t('nav_open_menu', 'Open menu'));
+    setElementHidden(menuIcon, false);
+    setElementHidden(closeIcon, true);
     if (backdrop) {
       backdrop.hidden = true;
       document.body.style.overflow = '';
@@ -220,23 +236,29 @@ window.CivicSyncUtils = CivicSyncUtils;
     syncLabel();
     close();
   });
-  // Initial sync once i18n.js has applied translations on load.
+  // i18n.js is loaded before this file, so window.CivicSyncI18n already
+  // exists by the time this script runs -- sync immediately rather than
+  // waiting for DOMContentLoaded, removing any window where the trigger
+  // could still show its static HTML default.
   syncLabel();
+  // Defensive: DOMContentLoaded does not re-fire when a page is
+  // restored from the browser's back-forward cache, so also re-sync on
+  // pageshow to cover that case.
+  window.addEventListener('pageshow', syncLabel);
 })();
 
 // --- Citizen header: theme toggle (Milestone 25.9) ---------------------------
 (function initThemeToggle() {
   const button = document.getElementById('theme-toggle');
   if (!button || !window.CivicSyncTheme) return;
-  const sunIcon = button.querySelector('.icon--sun');
-  const moonIcon = button.querySelector('.icon--moon');
 
   function syncButton() {
     const isDark = window.CivicSyncTheme.getTheme() === 'dark';
     button.setAttribute('aria-pressed', isDark ? 'true' : 'false');
-    button.setAttribute('aria-label', isDark ? 'Switch to light mode' : 'Switch to dark mode');
-    if (sunIcon) sunIcon.hidden = isDark;
-    if (moonIcon) moonIcon.hidden = !isDark;
+    const key = isDark ? 'theme_switch_to_light' : 'theme_switch_to_dark';
+    const fallback = isDark ? 'Switch to light mode' : 'Switch to dark mode';
+    button.setAttribute('aria-label', window.CivicSyncI18n ? window.CivicSyncI18n.t(key) : fallback);
+    button.classList.toggle('is-dark', isDark);
   }
 
   button.addEventListener('click', () => {
@@ -245,6 +267,7 @@ window.CivicSyncUtils = CivicSyncUtils;
   });
 
   document.addEventListener('civicsync:themechange', syncButton);
+  document.addEventListener('civicsync:languagechange', syncButton);
 
   syncButton();
 })();
@@ -388,4 +411,24 @@ window.CivicSyncUtils = CivicSyncUtils;
   observer.observe(document.body, { childList: true, subtree: true, characterData: true });
 
   update();
+})();
+
+// --- Password visibility toggle (Milestone 26.0) ------------------------------
+(function initPasswordToggle() {
+  const toggle = document.getElementById('password-toggle');
+  const input = document.getElementById('password-input');
+  if (!toggle || !input) return;
+  const eyeIcon = toggle.querySelector('.icon--eye');
+  const eyeOffIcon = toggle.querySelector('.icon--eye-off');
+
+  toggle.addEventListener('click', () => {
+    const willBeVisible = input.type === 'password';
+    input.type = willBeVisible ? 'text' : 'password';
+    toggle.setAttribute('aria-pressed', willBeVisible ? 'true' : 'false');
+    const key = willBeVisible ? 'authority_login_hide_password' : 'authority_login_show_password';
+    const fallback = willBeVisible ? 'Hide password' : 'Show password';
+    toggle.setAttribute('aria-label', window.CivicSyncI18n ? window.CivicSyncI18n.t(key) : fallback);
+    setElementHidden(eyeIcon, !willBeVisible);
+    setElementHidden(eyeOffIcon, willBeVisible);
+  });
 })();

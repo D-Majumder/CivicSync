@@ -24,6 +24,13 @@
   --color-primary: #0f172a; /* DESIGN.md prose: "Civic Blue" #0F172A used for primary surfaces/nav */
   --color-on-primary: #ffffff;
   --color-primary-container: #131b2e;
+  /* Primary-button colors (Milestone 26.0): kept distinct from
+     --color-primary/on-primary above because that pair also drives the
+     always-dark authority sidebar background, which must not change.
+     In light mode this matches the deep-navy button that already
+     existed; only the dark-mode value (below) differs. */
+  --color-btn-primary-bg: var(--color-primary);
+  --color-btn-primary-text: var(--color-on-primary);
   --color-on-primary-container: #7c839b;
 
   --color-secondary: #515f74;
@@ -38,6 +45,16 @@
   --color-error: #ba1a1a;
   --color-on-error: #ffffff;
   --color-error-container: #ffdad6;
+  /* --- Authority accent (Milestone 26.0) --------------------------------
+     A fixed institutional accent (not theme-flipped, same spirit as the
+     citizen Civic Blue) marking "restricted institutional access" --
+     used for the Authority Portal entry point and sparingly within the
+     authority command center itself. Verified 9.4:1 contrast with
+     white text. Gold is a thin accent only, never a fill. */
+  --color-authority-red: #8a1728;
+  --color-authority-red-hover: #711220;
+  --color-authority-gold: #b8923f;
+
   --color-on-error-container: #93000a;
 
   --color-success: #1e7a34;
@@ -51,40 +68,51 @@
   --color-card-header-border: #f1f5f9;
 
   /* --- Typography (from DESIGN.md `typography`) --- */
-  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-family: 'Josefin Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 
-  --display-lg-size: 48px;
+  /* Milestone 26.0: every size below is expressed as a calc() against
+     --a11y-font-scale (defined further down in this same :root block --
+     CSS custom properties resolve at use time, not declaration order,
+     so this is safe) so that the accessibility widget's text-size
+     control scales EVERY typographic role uniformly -- headings,
+     labels, body text -- from one shared source of truth. Previously
+     only body's own font-size referenced the scale, so headings/labels
+     (which each set their own explicit font-size via these same
+     tokens) never scaled; that was the actual cause of "text scaling
+     works on tracking but not landing" -- tracking's affected text
+     happened to be plain, unstyled body text, landing's didn't. */
+  --display-lg-size: calc(48px * var(--a11y-font-scale));
   --display-lg-weight: 700;
-  --display-lg-line: 56px;
+  --display-lg-line: calc(56px * var(--a11y-font-scale));
   --display-lg-tracking: -0.02em;
 
-  --display-lg-mobile-size: 32px;
-  --display-lg-mobile-line: 40px;
+  --display-lg-mobile-size: calc(32px * var(--a11y-font-scale));
+  --display-lg-mobile-line: calc(40px * var(--a11y-font-scale));
 
-  --headline-md-size: 24px;
+  --headline-md-size: calc(24px * var(--a11y-font-scale));
   --headline-md-weight: 600;
-  --headline-md-line: 32px;
+  --headline-md-line: calc(32px * var(--a11y-font-scale));
   --headline-md-tracking: -0.01em;
 
-  --headline-sm-size: 20px;
+  --headline-sm-size: calc(20px * var(--a11y-font-scale));
   --headline-sm-weight: 600;
-  --headline-sm-line: 28px;
+  --headline-sm-line: calc(28px * var(--a11y-font-scale));
 
-  --body-lg-size: 18px;
+  --body-lg-size: calc(18px * var(--a11y-font-scale));
   --body-lg-weight: 400;
-  --body-lg-line: 28px;
+  --body-lg-line: calc(28px * var(--a11y-font-scale));
 
-  --body-md-size: 16px;
+  --body-md-size: calc(16px * var(--a11y-font-scale));
   --body-md-weight: 400;
-  --body-md-line: 24px;
+  --body-md-line: calc(24px * var(--a11y-font-scale));
 
-  --body-sm-size: 14px;
+  --body-sm-size: calc(14px * var(--a11y-font-scale));
   --body-sm-weight: 400;
-  --body-sm-line: 20px;
+  --body-sm-line: calc(20px * var(--a11y-font-scale));
 
-  --label-md-size: 12px;
+  --label-md-size: calc(12px * var(--a11y-font-scale));
   --label-md-weight: 600;
-  --label-md-line: 16px;
+  --label-md-line: calc(16px * var(--a11y-font-scale));
   --label-md-tracking: 0.05em;
 
   /* --- Spacing (4px baseline grid, from DESIGN.md `spacing`) --- */
@@ -104,6 +132,11 @@
   --radius-lg: 0.5rem;
   --radius-xl: 0.75rem;
   --radius-full: 9999px;
+
+  /* --- Layout tokens (Milestone 26.0) --- */
+  --header-height: 68px;
+  --header-height-mobile: 60px;
+  --floating-widget-size: 48px;
 
   /* --- Elevation (from DESIGN.md "Elevation & Depth") ---
      A restrained 3-level scale, tinted with the primary navy
@@ -156,11 +189,18 @@
   --color-inverse-surface: #e7ecf7;
   --color-inverse-on-surface: #131e35;
   --color-outline: #4a5772;
-  --color-outline-variant: #2b3752;
+  --color-outline-variant: #5a7099;
 
   --color-primary: #060b16;
   --color-on-primary: #e7ecf7;
   --color-primary-container: #101a2e;
+  /* Dark mode: --color-primary is near-black (matches the always-dark
+     authority sidebar), which is nearly indistinguishable from the
+     dark page background when used for a primary button -- so primary
+     buttons use the brighter action-blue instead, with dark text for
+     contrast on it. */
+  --color-btn-primary-bg: var(--color-action);
+  --color-btn-primary-text: var(--color-primary);
   --color-on-primary-container: #a7b3cc;
 
   --color-secondary: #a7b3cc;
@@ -215,10 +255,12 @@
     --color-inverse-surface: #e7ecf7;
     --color-inverse-on-surface: #131e35;
     --color-outline: #4a5772;
-    --color-outline-variant: #2b3752;
+    --color-outline-variant: #5a7099;
     --color-primary: #060b16;
     --color-on-primary: #e7ecf7;
     --color-primary-container: #101a2e;
+    --color-btn-primary-bg: var(--color-action);
+    --color-btn-primary-text: var(--color-primary);
     --color-on-primary-container: #a7b3cc;
     --color-secondary: #a7b3cc;
     --color-on-secondary: #0b1220;
@@ -263,7 +305,7 @@ html {
 body {
   margin: 0;
   font-family: var(--font-family);
-  font-size: calc(var(--body-md-size) * var(--a11y-font-scale));
+  font-size: var(--body-md-size);
   line-height: var(--body-md-line);
   font-weight: var(--body-md-weight);
   color: var(--color-on-surface);

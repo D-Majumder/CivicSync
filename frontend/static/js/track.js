@@ -61,7 +61,16 @@
     el.textContent = value ? value : window.CivicSyncI18n.t('track_not_specified');
   }
 
+  // Milestone 27: the issue data itself never changes with language
+  // (it's real report data, not UI chrome -- must not be blindly
+  // re-translated), but several UI-derived labels shown alongside it
+  // (status chip, timeline status words) ARE translated via
+  // statusLabel() at render time, so a language switch after the
+  // result has already loaded needs to re-run that part of the render.
+  let lastLoadedIssue = null;
+
   function renderIssue(issue) {
+    lastLoadedIssue = issue;
     elCategory.textContent = issue.category;
     elStatusChip.textContent = window.CivicSyncI18n.statusLabel(issue.status);
     elStatusChip.className = `chip ${CivicSyncUtils.statusChipClass(issue.status)}`;
@@ -191,6 +200,10 @@
     const value = searchInput.value.trim().toUpperCase();
     if (!value) return;
     window.location.href = `/track/${encodeURIComponent(value)}`;
+  });
+
+  document.addEventListener('civicsync:languagechange', () => {
+    if (lastLoadedIssue) renderIssue(lastLoadedIssue);
   });
 
   const idFromPath = extractPublicIdFromPath();

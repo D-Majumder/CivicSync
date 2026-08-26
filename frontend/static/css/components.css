@@ -9,6 +9,14 @@
 /* --- Citizen top navigation -------------------------------------------------- */
 
 .site-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  height: var(--header-height);
+  display: flex;
+  align-items: center;
   background: var(--color-surface-container-lowest);
   border-bottom: 1px solid var(--color-card-border);
   box-shadow: var(--shadow-sm);
@@ -19,8 +27,8 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-lg);
-  padding-top: var(--space-md);
-  padding-bottom: var(--space-md);
+  height: 100%;
+  flex-wrap: nowrap;
 }
 
 .brand {
@@ -31,16 +39,17 @@
   color: var(--color-on-surface);
 }
 
-.brand img {
+.brand__mark {
   width: 30px;
   height: 30px;
+  flex-shrink: 0;
 }
 
 .brand span {
   font-weight: 800;
-  font-size: 19px;
+  font-size: calc(19px * var(--a11y-font-scale));
   letter-spacing: -0.015em;
-  color: var(--color-primary);
+  color: var(--color-on-surface);
 }
 
 .site-nav-collapsible {
@@ -79,14 +88,34 @@
   pointer-events: none;
 }
 
-/* Authority Portal is a deliberate, distinct entry point -- a small
-   outlined button, not another plain nav link, so it reads as "a
-   different kind of action" rather than an afterthought. */
+/* Authority Portal is a deliberate, distinct entry point -- filled
+   institutional crimson (not another outlined/secondary button),
+   communicating "restricted institutional access" without changing
+   the actual authentication destination/logic. A thin gold accent
+   underlines it -- gold stays a restrained accent line, never a fill. */
 .site-header__authority-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   white-space: nowrap;
   padding-top: 6px;
   padding-bottom: 6px;
   min-height: 36px;
+  background: var(--color-authority-red);
+  color: #ffffff;
+  border: none;
+  border-bottom: 2px solid var(--color-authority-gold);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.15);
+}
+.site-header__authority-btn:hover {
+  background: var(--color-authority-red-hover);
+}
+.site-header__authority-btn:active {
+  transform: translateY(1px);
+}
+.site-header__authority-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 /* Hidden on desktop -- the full nav is always visible there, so there
@@ -97,7 +126,7 @@
   border: 1px solid var(--color-outline-variant);
   border-radius: var(--radius-default);
   color: var(--color-on-surface);
-  font-size: 18px;
+  font-size: calc(18px * var(--a11y-font-scale));
   line-height: 1;
   padding: 6px 10px;
   min-width: 44px;
@@ -110,6 +139,9 @@
 }
 
 @media (max-width: 860px) {
+  .site-header {
+    height: var(--header-height-mobile);
+  }
   .site-header__nav-toggle {
     display: inline-flex;
     align-items: center;
@@ -124,14 +156,14 @@
   .site-nav-collapsible {
     display: flex;
     flex-direction: column;
-    align-items: stretch;
+    align-items: center;
     gap: var(--space-md);
     position: fixed;
-    top: 0;
+    top: var(--header-height-mobile);
     right: 0;
     bottom: 0;
     width: min(320px, 85vw);
-    padding: calc(var(--space-lg) + env(safe-area-inset-top)) var(--space-lg) var(--space-lg);
+    padding: var(--space-lg);
     background: var(--color-surface-container-lowest);
     box-shadow: var(--shadow-lg);
     transform: translateX(100%);
@@ -149,7 +181,10 @@
   .nav-backdrop {
     display: none;
     position: fixed;
-    inset: 0;
+    top: var(--header-height-mobile);
+    left: 0;
+    right: 0;
+    bottom: 0;
     background: rgba(0, 0, 0, 0.4);
     z-index: 55;
   }
@@ -157,17 +192,16 @@
     display: block;
   }
 
-  .site-header__inner {
-    flex-wrap: wrap;
-  }
   .site-nav {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: center;
+    width: 100%;
     gap: var(--space-sm);
   }
   .site-nav a {
     padding: 8px 0;
-    font-size: 15px;
+    font-size: calc(15px * var(--a11y-font-scale));
+    text-align: center;
   }
   .lang-dropdown {
     width: 100%;
@@ -182,9 +216,6 @@
     border: 1px solid var(--color-card-border);
     margin-top: var(--space-xs);
   }
-  .theme-toggle {
-    align-self: flex-start;
-  }
   .site-header__authority-btn {
     width: 100%;
     text-align: center;
@@ -197,6 +228,15 @@
 .icon {
   display: inline-block;
   flex-shrink: 0;
+}
+/* [hidden] and a class both setting `display` have equal specificity;
+   without this, whichever is declared later in the stylesheet wins,
+   which can silently defeat the native hidden attribute (this is
+   exactly what caused the password eye/eye-off icons to render
+   simultaneously). This guarantees hidden always actually hides,
+   regardless of what other classes are present on the element. */
+[hidden] {
+  display: none !important;
 }
 
 /* --- Language dropdown (Milestone 25.9) --------------------------------------
@@ -291,8 +331,12 @@ html[data-reduced-motion='true'] .icon--chevron {
   font-weight: 600;
 }
 
-/* --- Theme toggle (Milestone 25.9) -------------------------------------------- */
+/* --- Theme toggle (Milestone 25.9/26.0) ---------------------------------------
+   A proper animated sun/moon control: both icons occupy the same
+   position (absolutely stacked) and crossfade with a subtle rotation
+   as the theme changes, rather than an abrupt show/hide swap. */
 .theme-toggle {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -305,10 +349,43 @@ html[data-reduced-motion='true'] .icon--chevron {
   border-radius: var(--radius-default);
   color: var(--color-on-surface);
   cursor: pointer;
+  overflow: hidden;
 }
 .theme-toggle:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
+}
+.theme-toggle .icon--sun,
+.theme-toggle .icon--moon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(0deg) scale(1);
+  opacity: 1;
+  transition: opacity 0.25s ease, transform 0.25s ease, color 0.25s ease;
+}
+.theme-toggle .icon--sun {
+  color: #b8860b;
+}
+.theme-toggle .icon--moon {
+  color: #8fb2e8;
+  opacity: 0;
+  transform: translate(-50%, -50%) rotate(60deg) scale(0.5);
+}
+[data-theme='dark'] .theme-toggle .icon--sun {
+  color: #f0b429;
+}
+.theme-toggle.is-dark .icon--sun {
+  opacity: 0;
+  transform: translate(-50%, -50%) rotate(-60deg) scale(0.5);
+}
+.theme-toggle.is-dark .icon--moon {
+  opacity: 1;
+  transform: translate(-50%, -50%) rotate(0deg) scale(1);
+}
+html[data-reduced-motion='true'] .theme-toggle .icon--sun,
+html[data-reduced-motion='true'] .theme-toggle .icon--moon {
+  transition: none;
 }
 
 /* The authority sidebar is always a dark surface (its own --color-primary
@@ -320,12 +397,30 @@ html[data-reduced-motion='true'] .icon--chevron {
   height: auto;
   min-height: 40px;
   padding: 8px 12px;
+  padding-left: 34px;
   gap: var(--space-sm);
   border-color: rgba(255, 255, 255, 0.25);
   color: #ffffff;
   font-size: var(--body-sm-size);
   font-weight: 600;
   justify-content: flex-start;
+}
+/* The sidebar button has a text label beside the icon, so its icons
+   anchor to a fixed left-edge slot instead of centering within the
+   whole (wider) button as the header's icon-only square variant does. */
+.theme-toggle--sidebar .icon--sun,
+.theme-toggle--sidebar .icon--moon {
+  left: 12px;
+  transform: translateY(-50%) rotate(0deg) scale(1);
+}
+.theme-toggle--sidebar .icon--moon {
+  transform: translateY(-50%) rotate(60deg) scale(0.5);
+}
+.theme-toggle--sidebar.is-dark .icon--sun {
+  transform: translateY(-50%) rotate(-60deg) scale(0.5);
+}
+.theme-toggle--sidebar.is-dark .icon--moon {
+  transform: translateY(-50%) rotate(0deg) scale(1);
 }
 
 .site-footer {
@@ -390,6 +485,9 @@ html[data-reduced-motion='true'] .icon--chevron {
     grid-template-columns: 1fr;
     gap: var(--space-lg);
   }
+  .site-footer__bottom {
+    text-align: center;
+  }
 }
 
 /* --- Buttons ----------------------------------------------------------------- */
@@ -424,11 +522,11 @@ html[data-reduced-motion='true'] .icon--chevron {
 }
 
 .btn-primary {
-  background: var(--color-primary);
-  color: var(--color-on-primary);
+  background: var(--color-btn-primary-bg);
+  color: var(--color-btn-primary-text);
 }
 .btn-primary:hover:not(:disabled) {
-  background: #1a2438;
+  filter: brightness(0.92);
 }
 
 .btn-secondary {
@@ -495,12 +593,16 @@ html[data-reduced-motion='true'] .icon--chevron {
   color: var(--color-on-surface-variant);
 }
 
-.field textarea,
-.field input[type='text'] {
+textarea,
+input[type='text'],
+input[type='password'],
+input[type='email'],
+input[type='number'] {
   border: 1px solid var(--color-outline-variant);
   border-radius: var(--radius-default);
   padding: var(--space-sm) var(--space-md);
   font-size: var(--body-md-size);
+  font-family: inherit;
   color: var(--color-on-surface);
   background: var(--color-surface-container-lowest);
   resize: vertical;
@@ -510,8 +612,48 @@ html[data-reduced-motion='true'] .icon--chevron {
   min-height: 140px;
 }
 
-.field textarea:focus,
-.field input[type='text']:focus {
+/* Password visibility toggle (Milestone 26.0): sits inside the input's
+   own box so the field's overall footprint is unchanged; the input
+   gets right padding to clear the button. */
+.password-field {
+  position: relative;
+}
+.password-field input[type='password'],
+.password-field input[type='text'] {
+  padding-right: 44px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-default);
+  color: var(--color-on-surface-variant);
+  cursor: pointer;
+}
+.password-toggle:hover {
+  color: var(--color-on-surface);
+}
+.password-toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+textarea:focus,
+input[type='text']:focus,
+input[type='password']:focus,
+input[type='email']:focus,
+input[type='number']:focus {
   outline: none;
   border: 2px solid var(--color-action);
   padding: calc(var(--space-sm) - 1px) calc(var(--space-md) - 1px);
@@ -529,7 +671,8 @@ html[data-reduced-motion='true'] .icon--chevron {
 }
 
 .field.has-error textarea,
-.field.has-error input[type='text'] {
+.field.has-error input[type='text'],
+.field.has-error input[type='password'] {
   border-color: var(--color-error);
 }
 
@@ -545,7 +688,7 @@ html[data-reduced-motion='true'] .icon--chevron {
   gap: 6px;
   padding: 2px var(--space-sm);
   border-radius: var(--radius-full);
-  font-size: 12px;
+  font-size: calc(12px * var(--a11y-font-scale));
   font-weight: 600;
   white-space: nowrap;
 }
@@ -738,7 +881,7 @@ html[data-reduced-motion='true'] .icon--chevron {
   border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: var(--radius-default);
   color: #ffffff;
-  font-size: 18px;
+  font-size: calc(18px * var(--a11y-font-scale));
   line-height: 1;
   padding: 6px 10px;
   min-width: 44px;
@@ -752,6 +895,9 @@ html[data-reduced-motion='true'] .icon--chevron {
 }
 
 .authority-sidebar .brand {
+  color: #ffffff;
+}
+.authority-sidebar .brand span {
   color: #ffffff;
 }
 
@@ -867,7 +1013,7 @@ html[data-reduced-motion='true'] .icon--chevron {
 }
 
 .kpi-card__value {
-  font-size: 32px;
+  font-size: calc(32px * var(--a11y-font-scale));
   font-weight: 700;
   color: var(--color-on-surface);
 }
@@ -952,7 +1098,7 @@ html[data-reduced-motion='true'] .icon--chevron {
   background: transparent;
   color: var(--color-on-surface);
   border-radius: var(--radius-default);
-  font-size: 12px;
+  font-size: calc(12px * var(--a11y-font-scale));
   font-weight: 600;
   cursor: pointer;
 }

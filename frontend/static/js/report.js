@@ -144,7 +144,7 @@
     getStages().forEach((label) => {
       const item = document.createElement('div');
       item.className = 'analysis-stage';
-      item.innerHTML = `<span class="analysis-stage__marker">✓</span><span>${CivicSyncUtils.escapeHtml(label)}</span>`;
+      item.innerHTML = `<span class="analysis-stage__marker"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>${CivicSyncUtils.escapeHtml(label)}</span>`;
       stageListEl.appendChild(item);
     });
   }
@@ -195,9 +195,9 @@
   }
 
   function renderAnalysisOutcome(issue) {
-    analysisHeading.textContent = 'Analysis Complete';
+    analysisHeading.textContent = window.CivicSyncI18n.t('analysis_heading_complete');
     markAnalysisIconComplete();
-    analysisCaption.textContent = 'CivicSync\u2019s AI has classified your report.';
+    analysisCaption.textContent = window.CivicSyncI18n.t('analysis_caption_complete');
 
     analysisCategory.textContent = issue.category;
     const severityChip = analysisSeverity.querySelector('.chip');
@@ -401,7 +401,7 @@
         departmentListEl.appendChild(li);
       });
     } catch (err) {
-      departmentListEl.innerHTML = '<li class="department-list__item">Department list unavailable right now.</li>';
+      departmentListEl.innerHTML = `<li class="department-list__item">${CivicSyncUtils.escapeHtml(window.CivicSyncI18n.t('departments_unavailable'))}</li>`;
     }
   }
 

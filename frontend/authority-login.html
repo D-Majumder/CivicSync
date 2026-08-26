@@ -4,24 +4,64 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CivicSync — Authority Portal Login</title>
-  <link rel="icon" href="/static/assets/logo.png" />
+  <link rel="icon" type="image/svg+xml" href="/static/assets/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/css/tokens.css" />
   <link rel="stylesheet" href="/static/css/components.css" />
   <link rel="stylesheet" href="/static/css/pages.css" />
   <script src="/static/js/theme.js"></script>
+  <script src="/static/js/i18n.js"></script>
 </head>
 <body>
   <div class="page-shell">
     <header class="site-header">
       <div class="container site-header__inner">
         <a href="/" class="brand">
-          <img src="/static/assets/logo.png" alt="CivicSync" />
+          <svg class="brand__mark" width="30" height="30" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+            <path d="M24 6a18 18 0 1 1-12.73 5.27" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" fill="none"/>
+            <path d="M24 42a18 18 0 0 0 12.73-30.73" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" fill="none" opacity="0.45"/>
+            <path d="M11.2 5.6l0.1 6.7-6.7-0.4" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            <circle cx="24" cy="24" r="5.2" fill="currentColor"/>
+          </svg>
           <span>CivicSync</span>
         </a>
-        <nav class="site-nav" aria-label="Primary">
-          <a href="/">Report Issue</a>
-          <a href="/track">Track Status</a>
-        </nav>
+        <button
+          type="button"
+          class="site-header__nav-toggle"
+          id="citizen-nav-toggle"
+          aria-label="Open menu"
+          data-i18n-aria-label="nav_open_menu"
+          aria-expanded="false"
+          aria-controls="citizen-nav-collapsible"
+        >
+          <svg class="icon icon--menu" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          <svg class="icon icon--close" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true" hidden>
+            <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+        </button>
+
+        <div class="nav-backdrop" id="citizen-nav-backdrop" hidden></div>
+
+        <div class="site-nav-collapsible" id="citizen-nav-collapsible">
+          <nav class="site-nav" aria-label="Primary">
+            <a href="/" data-i18n="nav_report">Report Issue</a>
+            <a href="/track" data-i18n="nav_track">Track Status</a>
+          </nav>
+
+          <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch to dark mode" aria-pressed="false">
+            <svg class="icon icon--sun" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.8" />
+              <path d="M12 2.5v2.5M12 19v2.5M4.4 4.4l1.8 1.8M17.8 17.8l1.8 1.8M2.5 12H5M19 12h2.5M4.4 19.6l1.8-1.8M17.8 6.2l1.8-1.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+            <svg class="icon icon--moon" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+            </svg>
+          </button>
+        </div>
       </div>
     </header>
 
@@ -29,9 +69,9 @@
       <div class="container" style="display: flex; justify-content: center;">
         <div style="max-width: 420px; width: 100%; padding-top: var(--space-xl);">
           <div class="hero" style="margin-bottom: var(--space-lg); text-align: left;">
-            <span class="hero__eyebrow">Internal Access</span>
-            <h1 class="type-headline-md">Authority Portal</h1>
-            <p style="color: var(--color-on-surface-variant); margin-top: 8px;">
+            <span class="hero__eyebrow" data-i18n="authority_login_eyebrow">Internal Access</span>
+            <h1 class="type-headline-md" data-i18n="nav_authority_portal">Authority Portal</h1>
+            <p style="color: var(--color-on-surface-variant); margin-top: 8px;" data-i18n="authority_login_subtitle">
               Sign in to access the CivicSync Command Center. This area is for authorized civic
               authority personnel only.
             </p>
@@ -41,34 +81,68 @@
             <div class="card__body">
               <form id="login-form" novalidate>
                 <div class="field">
-                  <label for="username-input">Username</label>
+                  <label for="username-input" data-i18n="authority_login_username_label">Username</label>
                   <input type="text" id="username-input" name="username" autocomplete="username" required />
                 </div>
                 <div class="field">
-                  <label for="password-input">Password</label>
-                  <input type="password" id="password-input" name="password" autocomplete="current-password" required />
+                  <label for="password-input" data-i18n="authority_login_password_label">Password</label>
+                  <div class="password-field">
+                    <input type="password" id="password-input" name="password" autocomplete="current-password" required />
+                    <button type="button" class="password-toggle" id="password-toggle" aria-label="Show password" data-i18n-aria-label="authority_login_show_password" aria-pressed="false">
+                      <svg class="icon icon--eye" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" hidden>
+                        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+                        <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
+                      </svg>
+                      <svg class="icon icon--eye-off" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M3 3l18 18M9.9 9.9a3 3 0 0 0 4.2 4.2M6.1 6.2C3.8 7.9 2 12 2 12s3.5 7 10 7c1.8 0 3.3-.4 4.6-1.1M17.9 17.9C20.2 16.1 22 12 22 12s-1.3-2.6-3.7-4.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </button>
+                  </div>
                 </div>
 
                 <div id="login-notice" class="notice notice-error" hidden></div>
 
                 <button type="submit" class="btn btn-primary btn-block" id="login-submit-button">
-                  <span id="login-submit-label">Sign In</span>
+                  <span id="login-submit-label" data-i18n="authority_login_submit">Sign In</span>
                 </button>
               </form>
             </div>
           </div>
 
           <p class="type-body-sm" style="color: var(--color-on-surface-variant); margin-top: var(--space-md); text-align: center;">
-            Not an authority user? <a href="/" style="color: var(--color-action);">Return to the citizen site</a>.
+            <span data-i18n="authority_login_not_authority">Not an authority user?</span>
+            <a href="/" style="color: var(--color-action);" data-i18n="authority_login_return_link">Return to the citizen site</a>.
           </p>
         </div>
       </div>
     </main>
 
     <footer class="site-footer">
-      <div class="container site-footer__inner">
-        <span>© 2026 CivicSync</span>
-        <span>AI-assisted civic accountability platform</span>
+      <div class="container site-footer__grid">
+        <div class="site-footer__brand">
+          <a href="/" class="brand">
+            <svg class="brand__mark" width="30" height="30" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+              <path d="M24 6a18 18 0 1 1-12.73 5.27" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" fill="none"/>
+              <path d="M24 42a18 18 0 0 0 12.73-30.73" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" fill="none" opacity="0.45"/>
+              <path d="M11.2 5.6l0.1 6.7-6.7-0.4" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <circle cx="24" cy="24" r="5.2" fill="currentColor"/>
+            </svg>
+            <span>CivicSync</span>
+          </a>
+          <p class="site-footer__tagline" data-i18n="footer_tagline">
+            AI-assisted civic issue reporting and accountability — from citizen report to authority resolution.
+          </p>
+        </div>
+
+        <div class="site-footer__col">
+          <p class="site-footer__col-heading" data-i18n="footer_heading_citizen">Citizen</p>
+          <a href="/" data-i18n="nav_report">Report Issue</a>
+          <a href="/track" data-i18n="nav_track">Track Status</a>
+        </div>
+      </div>
+
+      <div class="container site-footer__bottom">
+        <span data-i18n="footer_copyright">© 2026 CivicSync</span>
       </div>
     </footer>
   </div>
