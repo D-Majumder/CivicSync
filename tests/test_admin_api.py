@@ -604,6 +604,206 @@ def test_admin_issue_list_pending_reopen_flag_no_n_plus_1_query(client):
     assert len(executed) <= 10
 
 
+def _decide_reopen(client, request_public_id, approve, decision_reason=None):
+    r = client.post(
+        f"/api/admin/reopen-requests/{request_public_id}/decision",
+        json={"approve": approve, "decision_reason": decision_reason},
+    )
+    assert r.status_code == 200, r.json()
+    return r.json()
+
+
+# --- Regression coverage: latest-reopen-request-state badge (Milestone 28.1) --
+#
+# A citizen may submit more than one reopen request over an issue's
+# lifetime (e.g. rejected, then a later one approved). The badge must
+# always reflect only the CURRENT/latest request, never a stale earlier
+# one, while the full sequence stays in the existing status/decision
+# history untouched. See backend.repository.get_latest_reopen_request_states.
+
+
+def test_no_reopen_request_has_no_latest_state(client):
+    resolved = _submit_issue(client)
+    _advance_and_resolve(client, resolved["public_id"])
+
+    body = client.get("/api/admin/issues").json()
+    item = next(i for i in body["items"] if i["public_id"] == resolved["public_id"])
+    assert item["latest_reopen_request_state"] is None
+    assert item["has_pending_reopen_request"] is False
+
+
+def test_pending_reopen_request_is_the_latest_state(client):
+    resolved = _submit_issue(client)
+    _advance_and_resolve(client, resolved["public_id"])
+    _request_reopen(client, resolved["public_id"])
+
+    body = client.get("/api/admin/issues").json()
+    item = next(i for i in body["items"] if i["public_id"] == resolved["public_id"])
+    assert item["latest_reopen_request_state"] == "PENDING"
+    assert item["has_pending_reopen_request"] is True
+
+
+def test_rejected_reopen_request_is_the_latest_state(client):
+    resolved = _submit_issue(client)
+    _advance_and_resolve(client, resolved["public_id"])
+    req = _request_reopen(client, resolved["public_id"])
+    _decide_reopen(client, req["public_id"], approve=False, decision_reason="Not enough evidence.")
+
+    body = client.get("/api/admin/issues").json()
+    item = next(i for i in body["items"] if i["public_id"] == resolved["public_id"])
+    assert item["latest_reopen_request_state"] == "REJECTED"
+    assert item["has_pending_reopen_request"] is False
+    assert item["status"] == "RESOLVED"  # rejection never changes the issue's own status
+
+
+def test_approved_reopen_request_is_the_latest_state_and_issue_reopens(client):
+    resolved = _submit_issue(client)
+    _advance_and_resolve(client, resolved["public_id"])
+    req = _request_reopen(client, resolved["public_id"])
+    _decide_reopen(client, req["public_id"], approve=True, decision_reason="Confirmed recurrence.")
+
+    body = client.get("/api/admin/issues").json()
+    item = next(i for i in body["items"] if i["public_id"] == resolved["public_id"])
+    assert item["latest_reopen_request_state"] == "APPROVED"
+    assert item["has_pending_reopen_request"] is False
+    assert item["status"] == "REOPENED"  # existing approval workflow, unchanged
+
+
+def test_rejected_then_new_pending_request_shows_only_pending(client):
+    """The exact edge case in the spec: reject, then request again -- the
+    latest state must be PENDING, not REJECTED, and there is only ever
+    one current badge, never both."""
+    resolved = _submit_issue(client)
+    _advance_and_resolve(client, resolved["public_id"])
+
+    first = _request_reopen(client, resolved["public_id"])
+    _decide_reopen(client, first["public_id"], approve=False, decision_reason="Too soon to tell.")
+    second = _request_reopen(client, resolved["public_id"], reason="It broke again, this time for real.")
+
+    body = client.get("/api/admin/issues").json()
+    item = next(i for i in body["items"] if i["public_id"] == resolved["public_id"])
+    assert item["latest_reopen_request_state"] == "PENDING"
+    assert item["has_pending_reopen_request"] is True
+
+    detail = client.get(f"/api/admin/issues/{resolved['public_id']}").json()
+    assert detail["latest_reopen_request_state"] == "PENDING"
+    # The actionable panel must point at the NEW pending request, not the
+    # old rejected one.
+    assert detail["pending_reopen_request"]["public_id"] == second["public_id"]
+
+
+def test_rejected_then_new_approved_request_shows_only_reopened(client):
+    """Resolved -> Reopen Requested -> Rejected -> Reopen Requested again
+    -> Approved -> Reopened. Final badge must be exactly [Reopened],
+    never a stale Rejected or Pending badge."""
+    resolved = _submit_issue(client)
+    _advance_and_resolve(client, resolved["public_id"])
+
+    first = _request_reopen(client, resolved["public_id"])
+    _decide_reopen(client, first["public_id"], approve=False, decision_reason="Too soon to tell.")
+    second = _request_reopen(client, resolved["public_id"], reason="It broke again, this time for real.")
+    _decide_reopen(client, second["public_id"], approve=True, decision_reason="Confirmed on-site.")
+
+    body = client.get("/api/admin/issues").json()
+    item = next(i for i in body["items"] if i["public_id"] == resolved["public_id"])
+    assert item["latest_reopen_request_state"] == "APPROVED"
+    assert item["has_pending_reopen_request"] is False
+    assert item["status"] == "REOPENED"
+
+    detail = client.get(f"/api/admin/issues/{resolved['public_id']}").json()
+    assert detail["latest_reopen_request_state"] == "APPROVED"
+    assert detail["pending_reopen_request"] is None  # nothing currently actionable
+
+
+def test_rejected_reopen_request_excluded_from_pending_metric(client):
+    resolved = _submit_issue(client)
+    _advance_and_resolve(client, resolved["public_id"])
+    req = _request_reopen(client, resolved["public_id"])
+    _decide_reopen(client, req["public_id"], approve=False, decision_reason="Not enough evidence.")
+
+    body = client.get("/api/admin/analytics/resolution-intelligence").json()
+    assert body["pending_reopen_requests"] == 0
+
+
+def test_approved_reopen_request_excluded_from_pending_metric(client):
+    resolved = _submit_issue(client)
+    _advance_and_resolve(client, resolved["public_id"])
+    req = _request_reopen(client, resolved["public_id"])
+    _decide_reopen(client, req["public_id"], approve=True, decision_reason="Confirmed.")
+
+    body = client.get("/api/admin/analytics/resolution-intelligence").json()
+    assert body["pending_reopen_requests"] == 0
+
+
+def test_new_pending_request_after_earlier_rejection_counted_as_pending(client):
+    resolved = _submit_issue(client)
+    _advance_and_resolve(client, resolved["public_id"])
+    first = _request_reopen(client, resolved["public_id"])
+    _decide_reopen(client, first["public_id"], approve=False, decision_reason="Too soon.")
+    _request_reopen(client, resolved["public_id"], reason="It broke again.")
+
+    body = client.get("/api/admin/analytics/resolution-intelligence").json()
+    assert body["pending_reopen_requests"] == 1
+
+
+def test_reopened_issue_counts_as_active_per_m28_metric(client):
+    """M28 regression guard: REOPENED must remain active in the corrected
+    active-issue metric (only RESOLVED/CLOSED/REJECTED are inactive)."""
+    resolved = _submit_issue(client)
+    _advance_and_resolve(client, resolved["public_id"])
+    req = _request_reopen(client, resolved["public_id"])
+    _decide_reopen(client, req["public_id"], approve=True, decision_reason="Confirmed.")
+
+    summary = client.get("/api/admin/dashboard/summary").json()
+    assert summary["by_status"]["REOPENED"] == 1
+    assert summary["active_issue_count"] == 1  # the REOPENED issue is active
+
+
+def test_reopen_request_history_preserved_across_reject_then_approve_cycle(client):
+    """The historical sequence must remain fully intact in status history
+    even though the badge only ever shows the current state."""
+    resolved = _submit_issue(client)
+    _advance_and_resolve(client, resolved["public_id"])
+    first = _request_reopen(client, resolved["public_id"])
+    _decide_reopen(client, first["public_id"], approve=False, decision_reason="Too soon.")
+    second = _request_reopen(client, resolved["public_id"], reason="It broke again.")
+    _decide_reopen(client, second["public_id"], approve=True, decision_reason="Confirmed.")
+
+    detail = client.get(f"/api/admin/issues/{resolved['public_id']}").json()
+    # The issue's own status history still records the real transition
+    # sequence -- rejecting never adds a status-history row (it's not a
+    # status change), approving does (RESOLVED -> REOPENED), matching the
+    # existing, unmodified decide_reopen_request/transition mechanism.
+    to_statuses = [row["to_status"] for row in detail["status_history"]]
+    assert to_statuses[-1] == "REOPENED"
+    assert "RESOLVED" in to_statuses
+
+
+def test_latest_reopen_request_lookup_no_n_plus_1_query(client):
+    """The bulk latest-state lookup must be one query for the whole page,
+    regardless of how many issues have reopen request history."""
+    for _ in range(5):
+        issue = _submit_issue(client)
+        _advance_and_resolve(client, issue["public_id"])
+        req = _request_reopen(client, issue["public_id"])
+        _decide_reopen(client, req["public_id"], approve=False, decision_reason="No.")
+        _request_reopen(client, issue["public_id"], reason="Again.")
+
+    executed = []
+
+    def _record(conn, cursor, statement, parameters, context, executemany):
+        executed.append(statement)
+
+    event.listen(client.engine, "before_cursor_execute", _record)
+    try:
+        response = client.get("/api/admin/issues")
+    finally:
+        event.remove(client.engine, "before_cursor_execute", _record)
+
+    assert response.status_code == 200
+    assert len(executed) <= 10
+
+
 def test_dashboard_aggregation_is_database_driven_not_python_full_scan(client):
     """Regardless of dataset size, the summary should execute a small,
     constant number of SQL statements (a handful of GROUP BY queries),

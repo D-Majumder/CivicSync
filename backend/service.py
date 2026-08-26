@@ -34,7 +34,7 @@ from ai.client import (
 from ai.schemas import IssueCategory, SeverityLevel
 from backend import insights as insight_rules
 from backend.assignment_rules import DepartmentInactiveError, DepartmentNotFoundError
-from backend.models import Department, Issue, IssueStatus, JurisdictionLevel, ReopenRequest
+from backend.models import Department, Issue, IssueStatus, JurisdictionLevel, ReopenRequest, ReopenRequestState
 from backend.repository import (
     METRIC_INACTIVE_STATUSES,
     TERMINAL_STATUSES,
@@ -69,7 +69,7 @@ from backend.repository import (
     decide_reopen_request as repo_decide_reopen_request,
     get_evidence_by_public_id,
     get_evidence_for_issue,
-    get_issue_ids_with_pending_reopen_request,
+    get_latest_reopen_request_states,
     get_pending_reopen_request,
     get_reopen_request_by_public_id,
     resolve_issue as repo_resolve_issue,
@@ -441,8 +441,9 @@ def get_public_tracking(db: Session, public_id: str) -> PublicIssueTrackingRespo
 
 
 def _build_admin_list_item(
-    issue: Issue, *, pending_reopen_issue_ids: set[int] = frozenset()
+    issue: Issue, *, latest_reopen_states: dict[int, ReopenRequestState] | None = None
 ) -> AdminIssueListItem:
+    latest_state = (latest_reopen_states or {}).get(issue.id)
     return AdminIssueListItem(
         public_id=issue.public_id,
         category=issue.category,
@@ -453,17 +454,30 @@ def _build_admin_list_item(
         assigned_department=_department_summary(issue.assigned_department),
         created_at=issue.created_at,
         updated_at=issue.updated_at,
-        has_pending_reopen_request=issue.id in pending_reopen_issue_ids,
+        # has_pending_reopen_request kept (Milestone 28) as a plain bool
+        # for callers/tests that only care "is there something to act on
+        # right now". It is always exactly (latest_state == PENDING):
+        # request_issue_reopen never allows a new request to be created
+        # while a PENDING one exists, so whenever a PENDING request
+        # exists it is necessarily also the latest one -- see
+        # get_latest_reopen_request_states in backend/repository.py.
+        has_pending_reopen_request=(latest_state == ReopenRequestState.PENDING),
+        # Milestone 28.1: the issue's CURRENT reopen-request status,
+        # independent of has_pending_reopen_request above -- this is what
+        # lets a list badge distinguish "never requested" from "most
+        # recently rejected" (has_pending_reopen_request is False for
+        # both). None if the issue has never had a reopen request.
+        latest_reopen_request_state=latest_state,
     )
 
 
 def _build_admin_list_items(db: Session, issues: list[Issue]) -> list[AdminIssueListItem]:
-    """Build a list of AdminIssueListItem, flagging pending reopen requests
-    in one bulk query rather than one per row (see
-    get_issue_ids_with_pending_reopen_request)."""
-    pending_ids = get_issue_ids_with_pending_reopen_request(db, [issue.id for issue in issues])
+    """Build a list of AdminIssueListItem, resolving each issue's current
+    reopen-request state in one bulk query rather than one per row (see
+    get_latest_reopen_request_states)."""
+    latest_states = get_latest_reopen_request_states(db, [issue.id for issue in issues])
     return [
-        _build_admin_list_item(issue, pending_reopen_issue_ids=pending_ids) for issue in issues
+        _build_admin_list_item(issue, latest_reopen_states=latest_states) for issue in issues
     ]
 
 
@@ -573,6 +587,7 @@ def get_admin_issue_detail(db: Session, public_id: str) -> AdminIssueDetailRespo
         assignment_history=assignment_history,
         evidence=evidence,
         pending_reopen_request=get_issue_pending_reopen_request(db, issue),
+        latest_reopen_request_state=get_latest_reopen_request_states(db, [issue.id]).get(issue.id),
     )
 
 

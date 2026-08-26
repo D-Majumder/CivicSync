@@ -368,6 +368,44 @@ def get_issue_ids_with_pending_reopen_request(
     return {row[0] for row in rows}
 
 
+def get_latest_reopen_request_states(
+    db: Session, issue_ids: list[int]
+) -> dict[int, ReopenRequestState]:
+    """Bulk lookup of each issue's MOST RECENT reopen request state
+    (PENDING, APPROVED, or REJECTED), regardless of state -- unlike
+    get_issue_ids_with_pending_reopen_request above, which only reports
+    currently-pending ones.
+
+    Used to drive the authority-facing "current reopen status" badge,
+    which must reflect only the latest request when a citizen has
+    submitted more than one over an issue's lifetime (e.g. rejected, then
+    a later one approved) -- never a stale earlier state. Issues with no
+    reopen request at all are simply absent from the returned dict.
+
+    request_issue_reopen (backend/service.py) only ever allows a new
+    request to be created once any prior one has been decided, so the
+    most-recently-created request (highest id) is always the current one
+    to reflect -- this is a single bulk SQL query, not one per issue, and
+    the reduction to "most recent per issue" happens in Python over that
+    one result set. Empty input -> empty result, no query issued.
+    """
+    if not issue_ids:
+        return {}
+    rows = (
+        db.query(ReopenRequest.issue_id, ReopenRequest.state)
+        .filter(ReopenRequest.issue_id.in_(issue_ids))
+        .order_by(ReopenRequest.issue_id, ReopenRequest.id.desc())
+        .all()
+    )
+    latest_state_by_issue_id: dict[int, ReopenRequestState] = {}
+    for issue_id, state in rows:
+        # Rows are ordered id DESC within each issue_id, so the first
+        # occurrence seen for a given issue_id is its latest request.
+        if issue_id not in latest_state_by_issue_id:
+            latest_state_by_issue_id[issue_id] = state
+    return latest_state_by_issue_id
+
+
 def get_reopen_request_by_public_id(db: Session, public_id: str) -> ReopenRequest | None:
     """Fetch a single ReopenRequest by its public reference. Never
     accepts or resolves a raw internal id from a caller."""

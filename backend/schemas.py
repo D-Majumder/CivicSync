@@ -454,8 +454,15 @@ class AdminIssueListItem(BaseModel):
     Requested" indicator without a per-row detail fetch -- it does NOT
     change the issue's own status field, which remains whatever it
     actually is (typically RESOLVED) until an authority decides the
-    request. See backend.repository.get_pending_reopen_request_issue_ids
-    for how this is populated in bulk (no N+1 query)."""
+    request. True exactly when latest_reopen_request_state is PENDING.
+
+    latest_reopen_request_state (Milestone 28.1) is the issue's most
+    recent reopen request's state overall (PENDING/APPROVED/REJECTED),
+    or None if it has never had one -- this is what lets a badge show
+    "Reopen Request Rejected" after a decision, distinct from "never
+    requested" (both leave has_pending_reopen_request False). See
+    backend.repository.get_latest_reopen_request_states for how both
+    fields are populated in one bulk query (no N+1)."""
 
     public_id: str
     category: IssueCategory
@@ -467,6 +474,7 @@ class AdminIssueListItem(BaseModel):
     created_at: UtcDatetime
     updated_at: UtcDatetime
     has_pending_reopen_request: bool
+    latest_reopen_request_state: ReopenRequestState | None
 
 
 class AdminIssueListResponse(BaseModel):
@@ -532,6 +540,12 @@ class AdminIssueDetailResponse(BaseModel):
     suggested_department, resolution_summary, and complete status/
     assignment history. Still never exposes the internal integer id or
     any history row's own id/issue_id/department_id.
+
+    pending_reopen_request is unchanged (Milestone 18) -- the PENDING
+    request only, driving the actionable Approve/Reject panel.
+    latest_reopen_request_state (Milestone 28.1) additionally exposes the
+    issue's current reopen status even when it's REJECTED (no pending
+    request to act on, but still worth surfacing as "current state").
     """
 
     public_id: str
@@ -561,6 +575,7 @@ class AdminIssueDetailResponse(BaseModel):
     assignment_history: list[AdminAssignmentHistoryEntry]
     evidence: list[EvidenceResponse]
     pending_reopen_request: ReopenRequestResponse | None
+    latest_reopen_request_state: ReopenRequestState | None
 
 
 class DepartmentIssueCount(BaseModel):

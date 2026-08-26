@@ -168,15 +168,29 @@
       .join('');
   }
 
+  /**
+   * The compact "current reopen status" badge shown next to an issue's
+   * status chip -- Milestone 28.1. Reflects only the LATEST reopen
+   * request (a citizen may submit more than one over an issue's
+   * lifetime, e.g. rejected once, then approved later); it must never
+   * stack multiple historical badges. APPROVED renders no badge here --
+   * once approved the issue's own status chip already reads REOPENED,
+   * which is the correct single signal at that point. Text-based (not
+   * color-only) per accessibility requirements.
+   */
+  function reopenBadgeHtml(latestReopenRequestState) {
+    if (latestReopenRequestState === 'PENDING') {
+      return ' <span class="chip chip-warning" title="A citizen has requested this issue be reopened">Reopen Requested</span>';
+    }
+    if (latestReopenRequestState === 'REJECTED') {
+      return ' <span class="chip chip-error" title="The authority rejected the citizen\'s reopen request">Reopen Request Rejected</span>';
+    }
+    return '';
+  }
+
   function issueRowHtml(item) {
     const deptName = item.assigned_department ? item.assigned_department.name : '\u2014 Unassigned';
-    // The issue's own status stays whatever it actually is (typically
-    // RESOLVED) -- a pending reopen request is a separate, additional
-    // badge, never a substitute status label. Text-based (not color-only)
-    // per accessibility requirements.
-    const reopenBadge = item.has_pending_reopen_request
-      ? ' <span class="chip chip-warning" title="A citizen has requested this issue be reopened">Reopen Requested</span>'
-      : '';
+    const reopenBadge = reopenBadgeHtml(item.latest_reopen_request_state);
     return `
       <tr class="is-clickable" data-public-id="${CivicSyncUtils.escapeHtml(item.public_id)}" data-severity="${CivicSyncUtils.escapeHtml(item.severity)}">
         <td class="cell-id">${CivicSyncUtils.escapeHtml(item.public_id)}</td>
@@ -837,7 +851,8 @@
             <div><dt>Last Updated</dt><dd>${CivicSyncUtils.formatTimestamp(detail.updated_at)}</dd></div>
             <div><dt>Resolved</dt><dd>${detail.resolved_at ? CivicSyncUtils.formatTimestamp(detail.resolved_at) : '\u2014'}</dd></div>
             <div><dt>Closed</dt><dd>${detail.closed_at ? CivicSyncUtils.formatTimestamp(detail.closed_at) : '\u2014'}</dd></div>
-            ${detail.pending_reopen_request ? `<div><dt>Reopen Request</dt><dd><span class="chip chip-warning">Pending Review</span></dd></div>` : ''}
+            ${detail.latest_reopen_request_state === 'PENDING' ? `<div><dt>Reopen Request</dt><dd><span class="chip chip-warning">Pending Review</span></dd></div>` : ''}
+            ${detail.latest_reopen_request_state === 'REJECTED' ? `<div><dt>Reopen Request</dt><dd><span class="chip chip-error">Rejected</span></dd></div>` : ''}
           </dl>
         </div>
       </div>
