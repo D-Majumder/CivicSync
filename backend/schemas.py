@@ -432,6 +432,16 @@ class PublicIssueTrackingResponse(BaseModel):
     timeline: list[PublicTimelineEntry]
     evidence: list[PublicEvidenceSummary]
     active_reopen_request: ReopenRequestResponse | None
+    # Milestone 29.1: the issue's CURRENT reopen-request state overall
+    # (PENDING/APPROVED/REJECTED), independent of active_reopen_request
+    # above -- lets the tracking page show "your request was not
+    # approved" after a rejection, which active_reopen_request alone
+    # cannot (it's PENDING-only, by design, since it also gates whether
+    # the citizen reopen-request FORM is shown/hidden -- see
+    # frontend/static/js/track.js). None if never requested. Reuses
+    # backend.repository.get_latest_reopen_request_states (Milestone
+    # 28.1) -- no new query pattern introduced.
+    latest_reopen_request_state: ReopenRequestState | None
 
 
 # --- Authority operations (Milestone 8) --------------------------------------

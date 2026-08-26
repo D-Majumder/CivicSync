@@ -99,6 +99,30 @@ def _route(client, public_id: str, department_code: str = "STREET_LIGHTING") -> 
     return response.json()
 
 
+def _advance_and_resolve(client, public_id, note="Repair crew fixed the reported issue on-site."):
+    for status_value in ["CLASSIFIED", "ROUTED", "ACKNOWLEDGED", "IN_PROGRESS"]:
+        r = client.post(f"/api/issues/{public_id}/status", json={"status": status_value})
+        assert r.status_code == 200, r.json()
+    r = client.post(f"/api/issues/{public_id}/resolve", json={"resolution_note": note})
+    assert r.status_code == 200, r.json()
+    return r.json()
+
+
+def _request_reopen(client, public_id, reason="It broke again a week later."):
+    r = client.post(f"/api/track/{public_id}/reopen-request", json={"reason": reason})
+    assert r.status_code == 201, r.json()
+    return r.json()
+
+
+def _decide_reopen(client, request_public_id, approve, decision_reason=None):
+    r = client.post(
+        f"/api/admin/reopen-requests/{request_public_id}/decision",
+        json={"approve": approve, "decision_reason": decision_reason},
+    )
+    assert r.status_code == 200, r.json()
+    return r.json()
+
+
 # --- 1-7: basic tracking of a fresh issue ------------------------------------
 
 
@@ -413,6 +437,75 @@ def test_tracking_a_reopened_issue_works(client):
     assert body["status_label"] == "Reopened"
 
 
+# --- Milestone 29.1: citizen-facing latest reopen-request state -------------
+#
+# active_reopen_request (above) is deliberately PENDING-only -- it also
+# gates whether the citizen-facing reopen FORM is shown, and that must
+# stay unchanged. latest_reopen_request_state is the new, separate field
+# that lets the tracking page additionally recognize a REJECTED request,
+# without altering when the form itself appears.
+
+
+def test_no_reopen_request_has_no_latest_state(client):
+    created = _submit_issue(client)
+    _advance_and_resolve(client, created["public_id"])
+
+    body = client.get(f"/api/track/{created['public_id']}").json()
+    assert body["latest_reopen_request_state"] is None
+    assert body["active_reopen_request"] is None
+
+
+def test_pending_reopen_request_is_the_latest_state(client):
+    created = _submit_issue(client)
+    _advance_and_resolve(client, created["public_id"])
+    _request_reopen(client, created["public_id"])
+
+    body = client.get(f"/api/track/{created['public_id']}").json()
+    assert body["latest_reopen_request_state"] == "PENDING"
+    assert body["active_reopen_request"] is not None
+
+
+def test_rejected_reopen_request_is_the_latest_state(client):
+    created = _submit_issue(client)
+    _advance_and_resolve(client, created["public_id"])
+    req = _request_reopen(client, created["public_id"])
+    _decide_reopen(client, req["public_id"], approve=False, decision_reason="Not enough evidence.")
+
+    body = client.get(f"/api/track/{created['public_id']}").json()
+    assert body["latest_reopen_request_state"] == "REJECTED"
+    assert body["active_reopen_request"] is None  # form must remain available
+    assert body["status"] == "RESOLVED"  # rejection never changes the issue's own status
+
+
+def test_rejected_then_new_pending_shows_only_pending_to_citizen(client):
+    """The exact edge case in the spec: a citizen must never see a stale
+    'rejected' state once they've submitted a new request."""
+    created = _submit_issue(client)
+    _advance_and_resolve(client, created["public_id"])
+    first = _request_reopen(client, created["public_id"])
+    _decide_reopen(client, first["public_id"], approve=False, decision_reason="Too soon to tell.")
+    _request_reopen(client, created["public_id"], reason="It broke again, this time for real.")
+
+    body = client.get(f"/api/track/{created['public_id']}").json()
+    assert body["latest_reopen_request_state"] == "PENDING"
+    assert body["active_reopen_request"] is not None
+
+
+def test_rejected_then_new_approved_shows_reopened_to_citizen(client):
+    created = _submit_issue(client)
+    _advance_and_resolve(client, created["public_id"])
+    first = _request_reopen(client, created["public_id"])
+    _decide_reopen(client, first["public_id"], approve=False, decision_reason="Too soon to tell.")
+    second = _request_reopen(client, created["public_id"], reason="It broke again, this time for real.")
+    _decide_reopen(client, second["public_id"], approve=True, decision_reason="Confirmed on-site.")
+
+    body = client.get(f"/api/track/{created['public_id']}").json()
+    assert body["latest_reopen_request_state"] == "APPROVED"
+    assert body["status"] == "REOPENED"
+    assert body["status_label"] == "Reopened"
+    assert body["active_reopen_request"] is None
+
+
 # --- 24: no stack traces / internal details leaked --------------------------
 
 
@@ -453,6 +546,7 @@ def test_response_top_level_fields_are_exactly_the_approved_set(client):
         "timeline",
         "evidence",
         "active_reopen_request",
+        "latest_reopen_request_state",
     }
 
 

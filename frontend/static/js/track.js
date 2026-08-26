@@ -38,6 +38,7 @@
   const elEvidenceList = document.getElementById('track-evidence-list');
   const elReopenSection = document.getElementById('track-reopen-section');
   const elReopenFormWrapper = document.getElementById('track-reopen-form-wrapper');
+  const elReopenRejectedNote = document.getElementById('track-reopen-rejected-note');
   const elReopenReason = document.getElementById('track-reopen-reason');
   const elReopenSubmitBtn = document.getElementById('track-reopen-submit-btn');
   const elReopenFeedback = document.getElementById('track-reopen-feedback');
@@ -140,13 +141,23 @@
       elReopenFeedback.textContent = '';
       elReopenFeedback.className = 'action-feedback';
       if (issue.active_reopen_request) {
+        // A currently PENDING request -- unchanged from before.
         elReopenFormWrapper.hidden = true;
         elReopenStatus.hidden = false;
         elReopenStatusText.textContent = window.CivicSyncI18n.t('reopen_pending_message');
       } else {
+        // No PENDING request right now -- either none was ever made, or
+        // the latest one was rejected (in which case the form remains
+        // available so the citizen can submit a new one, unchanged
+        // workflow; only a gentle notice is added above it). Milestone
+        // 29.1: latest_reopen_request_state, not active_reopen_request,
+        // decides whether that notice shows, so a NEW pending request
+        // (after an earlier rejection) never shows a stale "rejected"
+        // message -- it already took the branch above instead.
         elReopenFormWrapper.hidden = false;
         elReopenStatus.hidden = true;
         elReopenReason.value = '';
+        elReopenRejectedNote.hidden = issue.latest_reopen_request_state !== 'REJECTED';
       }
       elReopenSubmitBtn.onclick = () => handleReopenSubmit(issue.public_id);
     } else {

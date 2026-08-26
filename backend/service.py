@@ -434,6 +434,7 @@ def get_public_tracking(db: Session, public_id: str) -> PublicIssueTrackingRespo
         timeline=timeline,
         evidence=evidence,
         active_reopen_request=get_issue_pending_reopen_request(db, issue),
+        latest_reopen_request_state=get_latest_reopen_request_states(db, [issue.id]).get(issue.id),
     )
 
 

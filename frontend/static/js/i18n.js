@@ -170,6 +170,7 @@
       reopen_reason_placeholder: 'Explain why the resolution was inadequate or the issue has returned\u2026',
       reopen_submit_button: 'Request Reopening',
       reopen_pending_message: 'Your reopening request has been submitted and is pending authority review.',
+      reopen_rejected_message: 'Your reopening request was not approved. You can submit a new request if the issue persists.',
       reopen_error_too_short: 'Please describe why the resolution was inadequate.',
 
       status_submitted: 'Submitted',
@@ -334,6 +335,7 @@
       reopen_reason_placeholder: 'बताएं कि समाधान अपर्याप्त क्यों था या समस्या फिर से क्यों हुई\u2026',
       reopen_submit_button: 'पुनः खोलने का अनुरोध करें',
       reopen_pending_message: 'आपका पुनः खोलने का अनुरोध सबमिट हो गया है और प्राधिकरण की समीक्षा लंबित है।',
+      reopen_rejected_message: 'आपका पुनः खोलने का अनुरोध स्वीकृत नहीं किया गया। यदि समस्या बनी रहती है तो आप नया अनुरोध सबमिट कर सकते हैं।',
       reopen_error_too_short: 'कृपया बताएं कि समाधान अपर्याप्त क्यों था।',
 
       status_submitted: 'सबमिट हुई',
@@ -498,6 +500,7 @@
       reopen_reason_placeholder: 'সমাধান কেন যথেষ্ট ছিল না বা সমস্যা কেন ফিরে এসেছে তা লিখুন\u2026',
       reopen_submit_button: 'পুনরায় খোলার অনুরোধ করুন',
       reopen_pending_message: 'আপনার পুনরায় খোলার অনুরোধ জমা হয়েছে এবং কর্তৃপক্ষের পর্যালোচনা বাকি আছে।',
+      reopen_rejected_message: 'আপনার পুনরায় খোলার অনুরোধ অনুমোদিত হয়নি। সমস্যা বজায় থাকলে আপনি নতুন অনুরোধ জমা দিতে পারেন।',
       reopen_error_too_short: 'অনুগ্রহ করে লিখুন সমাধান কেন যথেষ্ট ছিল না।',
 
       status_submitted: 'জমা হয়েছে',
