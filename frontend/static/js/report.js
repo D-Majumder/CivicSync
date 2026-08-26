@@ -388,22 +388,55 @@
   });
 
   // --- Real department list (no fabricated trust stats) -----------------------------
+  // The backend's department names (dept.name) are the canonical values --
+  // used for routing/API/data and never altered here. This maps each
+  // known canonical name to a display-only translation key; any
+  // department not in this map (e.g. a future addition) safely falls
+  // back to its canonical name rather than breaking.
+  const DEPARTMENT_NAME_KEYS = {
+    'Electricity': 'department_name_electricity',
+    'Other': 'department_name_other',
+    'Parks & Environment': 'department_name_parks_environment',
+    'Public Health': 'department_name_public_health',
+    'Roads & Transport': 'department_name_roads_transport',
+    'Street Lighting': 'department_name_street_lighting',
+    'Waste Management': 'department_name_waste_management',
+    'Water & Sanitation': 'department_name_water_sanitation',
+  };
+
+  function localizedDepartmentName(canonicalName) {
+    const key = DEPARTMENT_NAME_KEYS[canonicalName];
+    if (!key) return canonicalName;
+    const translated = window.CivicSyncI18n.t(key);
+    return translated === key ? canonicalName : translated;
+  }
+
+  let lastLoadedDepartments = null;
+
+  function renderDepartmentList(departments) {
+    departmentListEl.innerHTML = '';
+    departments.forEach((dept) => {
+      const li = document.createElement('li');
+      li.className = 'department-list__item';
+      li.textContent = localizedDepartmentName(dept.name);
+      departmentListEl.appendChild(li);
+    });
+  }
 
   async function loadDepartments() {
     if (!departmentListEl) return;
     try {
       const departments = await CivicSyncApi.getDepartments();
-      departmentListEl.innerHTML = '';
-      departments.forEach((dept) => {
-        const li = document.createElement('li');
-        li.className = 'department-list__item';
-        li.textContent = dept.name;
-        departmentListEl.appendChild(li);
-      });
+      lastLoadedDepartments = departments;
+      renderDepartmentList(departments);
     } catch (err) {
       departmentListEl.innerHTML = `<li class="department-list__item">${CivicSyncUtils.escapeHtml(window.CivicSyncI18n.t('departments_unavailable'))}</li>`;
     }
   }
+
+  document.addEventListener('civicsync:languagechange', () => {
+    if (lastLoadedDepartments) renderDepartmentList(lastLoadedDepartments);
+  });
 
   loadDepartments();
 })();

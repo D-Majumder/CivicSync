@@ -52,6 +52,31 @@
             <a href="/track" data-i18n="nav_track">Track Status</a>
           </nav>
 
+          <div class="lang-dropdown" id="lang-dropdown">
+            <button type="button" class="lang-dropdown__trigger" id="lang-dropdown-trigger" aria-haspopup="true" aria-expanded="false" aria-controls="lang-dropdown-menu">
+              <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" />
+                <path d="M3 12h18M12 3c2.5 2.7 2.5 15.3 0 18M12 3c-2.5 2.7-2.5 15.3 0 18" stroke="currentColor" stroke-width="1.6" />
+              </svg>
+              <span id="lang-dropdown-current">English</span>
+              <svg class="icon icon--chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+            <div class="lang-dropdown__menu" id="lang-dropdown-menu" role="menu" hidden>
+              <p class="lang-dropdown__heading" data-i18n="lang_menu_heading">Language</p>
+              <button type="button" role="menuitemradio" data-language-option="en" aria-label="English">
+                <span class="lang-dropdown__check" aria-hidden="true">✓</span> English
+              </button>
+              <button type="button" role="menuitemradio" data-language-option="hi" aria-label="हिन्दी">
+                <span class="lang-dropdown__check" aria-hidden="true">✓</span> हिंदी
+              </button>
+              <button type="button" role="menuitemradio" data-language-option="bn" aria-label="বাংলা">
+                <span class="lang-dropdown__check" aria-hidden="true">✓</span> বাংলা
+              </button>
+            </div>
+          </div>
+
           <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch to dark mode" aria-pressed="false">
             <svg class="icon icon--sun" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.8" />
