@@ -448,7 +448,14 @@ class PublicIssueTrackingResponse(BaseModel):
 class AdminIssueListItem(BaseModel):
     """One row in an authority issue list (GET /api/admin/issues,
     /api/admin/queue, /api/admin/issues/stale). More than the public
-    tracking endpoint exposes, but still never the internal integer id."""
+    tracking endpoint exposes, but still never the internal integer id.
+
+    has_pending_reopen_request lets list/table views show a "Reopen
+    Requested" indicator without a per-row detail fetch -- it does NOT
+    change the issue's own status field, which remains whatever it
+    actually is (typically RESOLVED) until an authority decides the
+    request. See backend.repository.get_pending_reopen_request_issue_ids
+    for how this is populated in bulk (no N+1 query)."""
 
     public_id: str
     category: IssueCategory
@@ -459,6 +466,7 @@ class AdminIssueListItem(BaseModel):
     assigned_department: DepartmentSummary | None
     created_at: UtcDatetime
     updated_at: UtcDatetime
+    has_pending_reopen_request: bool
 
 
 class AdminIssueListResponse(BaseModel):
@@ -656,12 +664,20 @@ class DashboardSummaryResponse(BaseModel):
     (zero-filled), and by_department always includes every active
     department (zero-filled) -- see backend/repository.py's
     count_issues_by_status/severity/department, all SQL GROUP BY queries.
+
+    active_issue_count and active_high_critical_count are the correct,
+    server-computed "active" counts (per METRIC_INACTIVE_STATUSES, which
+    excludes RESOLVED as well as CLOSED/REJECTED) -- clients should use
+    these directly rather than re-deriving an "active" count from
+    by_status/by_severity themselves.
     """
 
     total_issues: int
     by_status: dict[IssueStatus, int]
     by_severity: dict[SeverityLevel, int]
     by_department: list[DepartmentIssueCount]
+    active_issue_count: int
+    active_high_critical_count: int
 
 
 class DepartmentSummaryResponse(BaseModel):

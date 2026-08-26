@@ -31,9 +31,11 @@ from backend.models import (
 from backend.transitions import validate_transition
 
 # Terminal lifecycle states -- an issue in one of these is done, in either
-# direction (successfully closed, or rejected as not actionable). Reused
-# by the department summary's "active issues" calculation and the
-# operational queue's exclusion list below.
+# direction (successfully closed, or rejected as not actionable). Governs
+# the operational queue's exclusion list and the aging-backlog view below:
+# both deliberately keep showing a RESOLVED-but-not-yet-CLOSED issue,
+# since it may still need authority attention (e.g. a pending citizen
+# reopen request).
 TERMINAL_STATUSES: frozenset[IssueStatus] = frozenset({IssueStatus.CLOSED, IssueStatus.REJECTED})
 
 # Statuses that represent work still requiring operational attention --
@@ -41,6 +43,17 @@ TERMINAL_STATUSES: frozenset[IssueStatus] = frozenset({IssueStatus.CLOSED, Issue
 OPERATIONAL_STATUSES: frozenset[IssueStatus] = frozenset(
     s for s in IssueStatus if s not in TERMINAL_STATUSES
 )
+
+# Statuses treated as "inactive" for authority-facing REPORTING metrics
+# (Command Center KPIs, the Departments page, and Civic Intelligence
+# advisories) -- deliberately broader than TERMINAL_STATUSES above. A
+# RESOLVED issue is operationally done from a metrics standpoint (it
+# shouldn't inflate an "active issues" count) even though it still needs
+# to remain visible in the operational queue/aging views until formally
+# CLOSED. This is the single shared definition every "active issue" count
+# below -- and every caller in backend/service.py -- must use; do not
+# reintroduce a local copy of this set anywhere else.
+METRIC_INACTIVE_STATUSES: frozenset[IssueStatus] = TERMINAL_STATUSES | {IssueStatus.RESOLVED}
 
 # Explicit, deterministic severity ordering for the operational queue --
 # NOT alphabetical. Lower number = higher priority (surfaced first).
@@ -331,6 +344,28 @@ def get_pending_reopen_request(db: Session, issue: Issue) -> ReopenRequest | Non
         )
         .one_or_none()
     )
+
+
+def get_issue_ids_with_pending_reopen_request(
+    db: Session, issue_ids: list[int]
+) -> set[int]:
+    """Bulk version of get_pending_reopen_request, for list/table views
+    (Issue Queue, All Issues, Stale Issues) that need to flag many issues
+    at once without one query per row. Returns the subset of issue_ids
+    that currently have a PENDING reopen request. Empty input -> empty
+    result, no query issued."""
+    if not issue_ids:
+        return set()
+    rows = (
+        db.query(ReopenRequest.issue_id)
+        .filter(
+            ReopenRequest.issue_id.in_(issue_ids),
+            ReopenRequest.state == ReopenRequestState.PENDING,
+        )
+        .distinct()
+        .all()
+    )
+    return {row[0] for row in rows}
 
 
 def get_reopen_request_by_public_id(db: Session, public_id: str) -> ReopenRequest | None:
@@ -918,7 +953,7 @@ def get_department_issue_counts(db: Session, department: Department) -> dict:
         by_severity[severity_value] = count
 
     total = sum(by_status.values())
-    active = sum(count for st, count in by_status.items() if st not in TERMINAL_STATUSES)
+    active = sum(count for st, count in by_status.items() if st not in METRIC_INACTIVE_STATUSES)
 
     return {
         "total_assigned_issues": total,
@@ -1206,16 +1241,17 @@ def get_recent_activity(
 def count_active_high_severity_issues(
     db: Session, *, jurisdiction_code: str | None = None
 ) -> dict[SeverityLevel, int] | None:
-    """Count of currently-active (non-terminal) issues at CRITICAL/HIGH
-    severity, by severity. One GROUP BY query; both severities are
-    present, zero-filled if unused. jurisdiction_code scopes to that
-    jurisdiction's subtree via Issue.jurisdiction_id; returns None if the
-    code doesn't match any real jurisdiction (caller maps that to 404).
+    """Count of currently-active (per METRIC_INACTIVE_STATUSES -- excludes
+    RESOLVED/CLOSED/REJECTED) issues at CRITICAL/HIGH severity, by
+    severity. One GROUP BY query; both severities are present, zero-filled
+    if unused. jurisdiction_code scopes to that jurisdiction's subtree via
+    Issue.jurisdiction_id; returns None if the code doesn't match any real
+    jurisdiction (caller maps that to 404).
     """
     high_severities = (SeverityLevel.CRITICAL, SeverityLevel.HIGH)
     counts: dict[SeverityLevel, int] = {s: 0 for s in high_severities}
     query = db.query(Issue.severity, func.count(Issue.id)).filter(
-        Issue.severity.in_(high_severities), Issue.status.notin_(TERMINAL_STATUSES)
+        Issue.severity.in_(high_severities), Issue.status.notin_(METRIC_INACTIVE_STATUSES)
     )
     if jurisdiction_code is not None:
         subtree_ids = get_jurisdiction_subtree_ids(db, jurisdiction_code)
@@ -1231,15 +1267,16 @@ def count_active_high_severity_issues(
 def count_active_issues_by_category(
     db: Session, *, jurisdiction_code: str | None = None
 ) -> dict[IssueCategory, int] | None:
-    """Count of currently-active (non-terminal) issues, by AI category.
-    One GROUP BY query; every IssueCategory is present, zero-filled if
-    unused. jurisdiction_code scopes to that jurisdiction's subtree via
-    Issue.jurisdiction_id; returns None if the code doesn't match any
-    real jurisdiction (caller maps that to 404).
+    """Count of currently-active (per METRIC_INACTIVE_STATUSES -- excludes
+    RESOLVED/CLOSED/REJECTED) issues, by AI category. One GROUP BY query;
+    every IssueCategory is present, zero-filled if unused. jurisdiction_code
+    scopes to that jurisdiction's subtree via Issue.jurisdiction_id; returns
+    None if the code doesn't match any real jurisdiction (caller maps that
+    to 404).
     """
     counts: dict[IssueCategory, int] = {c: 0 for c in IssueCategory}
     query = db.query(Issue.category, func.count(Issue.id)).filter(
-        Issue.status.notin_(TERMINAL_STATUSES)
+        Issue.status.notin_(METRIC_INACTIVE_STATUSES)
     )
     if jurisdiction_code is not None:
         subtree_ids = get_jurisdiction_subtree_ids(db, jurisdiction_code)

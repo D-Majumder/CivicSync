@@ -429,6 +429,181 @@ def test_dashboard_department_counts_correct(client):
     assert by_dept["ROADS_TRANSPORT"] == 0
 
 
+def _advance_and_resolve(client, public_id, note="Repair crew fixed the reported issue on-site."):
+    for status_value in ["CLASSIFIED", "ROUTED", "ACKNOWLEDGED", "IN_PROGRESS"]:
+        r = client.post(f"/api/issues/{public_id}/status", json={"status": status_value})
+        assert r.status_code == 200, r.json()
+    r = client.post(f"/api/issues/{public_id}/resolve", json={"resolution_note": note})
+    assert r.status_code == 200, r.json()
+    return r.json()
+
+
+def _request_reopen(client, public_id, reason="It broke again a week later."):
+    r = client.post(f"/api/track/{public_id}/reopen-request", json={"reason": reason})
+    assert r.status_code == 201, r.json()
+    return r.json()
+
+
+# --- Regression coverage: RESOLVED must not count as "active" -----------------
+#
+# Root cause of the Command Center / Departments / Civic Intelligence
+# metric inconsistency: several independent aggregations (backend and, at
+# the time, a duplicate copy in frontend/static/js/admin.js) excluded only
+# CLOSED/REJECTED from "active", never RESOLVED. See
+# backend.repository.METRIC_INACTIVE_STATUSES.
+
+
+def test_dashboard_active_issue_count_excludes_resolved(client):
+    """A RESOLVED issue must not be counted as active, even though it is
+    not yet CLOSED."""
+    resolved = _submit_issue(client)
+    _advance_and_resolve(client, resolved["public_id"])
+
+    routed = _submit_issue(client)
+    _advance(client, routed["public_id"], "CLASSIFIED", "ROUTED")
+
+    body = client.get("/api/admin/dashboard/summary").json()
+    assert body["total_issues"] == 2
+    assert body["active_issue_count"] == 1  # only the ROUTED one
+    assert body["by_status"]["RESOLVED"] == 1  # RESOLVED is still reported, just not "active"
+
+
+def test_dashboard_active_high_critical_count_excludes_resolved_critical(client):
+    """Mirrors the exact reported scenario: a Critical issue that is
+    RESOLVED must not inflate 'active High/Critical', while a High issue
+    that is only ROUTED must."""
+    resolved_critical = _submit_issue(client, severity=SeverityLevel.CRITICAL)
+    _advance_and_resolve(client, resolved_critical["public_id"])
+
+    routed_high = _submit_issue(client, severity=SeverityLevel.HIGH)
+    _advance(client, routed_high["public_id"], "CLASSIFIED", "ROUTED")
+
+    body = client.get("/api/admin/dashboard/summary").json()
+    assert body["active_high_critical_count"] == 1
+    assert body["by_severity"]["Critical"] == 1  # still reported in the raw breakdown
+    assert body["by_severity"]["High"] == 1
+
+
+def test_dashboard_active_high_critical_count_zero_when_only_resolved(client):
+    resolved_critical = _submit_issue(client, severity=SeverityLevel.CRITICAL)
+    _advance_and_resolve(client, resolved_critical["public_id"])
+
+    body = client.get("/api/admin/dashboard/summary").json()
+    assert body["active_high_critical_count"] == 0
+
+
+def test_dashboard_active_issue_count_includes_reopened(client):
+    """REOPENED is not a terminal state -- an issue back in REOPENED must
+    count as active again."""
+    resolved = _submit_issue(client)
+    _advance_and_resolve(client, resolved["public_id"])
+    reopen_request = _request_reopen(client, resolved["public_id"])
+    decision = client.post(
+        f"/api/admin/reopen-requests/{reopen_request['public_id']}/decision",
+        json={"approve": True, "decision_reason": "Confirmed recurrence."},
+    )
+    assert decision.status_code == 200, decision.json()
+
+    body = client.get("/api/admin/dashboard/summary").json()
+    assert body["active_issue_count"] == 1
+    assert body["by_status"]["REOPENED"] == 1
+
+
+# --- Regression coverage: pending reopen-request badge on list views ----------
+
+
+def test_admin_issue_list_item_has_pending_reopen_request_true_when_pending(client):
+    resolved = _submit_issue(client)
+    _advance_and_resolve(client, resolved["public_id"])
+    _request_reopen(client, resolved["public_id"])
+
+    body = client.get("/api/admin/issues").json()
+    item = next(i for i in body["items"] if i["public_id"] == resolved["public_id"])
+    assert item["has_pending_reopen_request"] is True
+    assert item["status"] == "RESOLVED"  # status itself is untouched by the pending request
+
+
+def test_admin_issue_list_item_has_pending_reopen_request_false_when_none(client):
+    resolved = _submit_issue(client)
+    _advance_and_resolve(client, resolved["public_id"])
+
+    body = client.get("/api/admin/issues").json()
+    item = next(i for i in body["items"] if i["public_id"] == resolved["public_id"])
+    assert item["has_pending_reopen_request"] is False
+
+
+def test_admin_issue_list_item_pending_reopen_flag_clears_after_approval(client):
+    resolved = _submit_issue(client)
+    _advance_and_resolve(client, resolved["public_id"])
+    reopen_request = _request_reopen(client, resolved["public_id"])
+
+    decision = client.post(
+        f"/api/admin/reopen-requests/{reopen_request['public_id']}/decision",
+        json={"approve": True, "decision_reason": None},
+    )
+    assert decision.status_code == 200, decision.json()
+
+    body = client.get("/api/admin/issues").json()
+    item = next(i for i in body["items"] if i["public_id"] == resolved["public_id"])
+    # The request is no longer PENDING (it's APPROVED) -- the badge must clear.
+    assert item["has_pending_reopen_request"] is False
+    assert item["status"] == "REOPENED"
+
+
+def test_admin_issue_list_item_pending_reopen_flag_clears_after_rejection(client):
+    resolved = _submit_issue(client)
+    _advance_and_resolve(client, resolved["public_id"])
+    reopen_request = _request_reopen(client, resolved["public_id"])
+
+    decision = client.post(
+        f"/api/admin/reopen-requests/{reopen_request['public_id']}/decision",
+        json={"approve": False, "decision_reason": "Insufficient evidence of recurrence."},
+    )
+    assert decision.status_code == 200, decision.json()
+
+    body = client.get("/api/admin/issues").json()
+    item = next(i for i in body["items"] if i["public_id"] == resolved["public_id"])
+    assert item["has_pending_reopen_request"] is False
+    assert item["status"] == "RESOLVED"  # rejection leaves the issue RESOLVED, not REOPENED
+
+
+def test_admin_queue_list_item_also_carries_pending_reopen_flag(client):
+    """The badge field must be present on the Issue Queue endpoint too, not
+    just All Issues -- both share AdminIssueListItem."""
+    resolved = _submit_issue(client)
+    _advance_and_resolve(client, resolved["public_id"])
+    _request_reopen(client, resolved["public_id"])
+
+    body = client.get("/api/admin/queue").json()
+    item = next((i for i in body["items"] if i["public_id"] == resolved["public_id"]), None)
+    # RESOLVED is not in TERMINAL_STATUSES, so it's still in the operational
+    # queue -- exactly so authorities can see and act on the reopen request.
+    assert item is not None
+    assert item["has_pending_reopen_request"] is True
+
+
+def test_admin_issue_list_pending_reopen_flag_no_n_plus_1_query(client):
+    """The bulk pending-reopen lookup must be one query for the whole page,
+    not one per row."""
+    for _ in range(5):
+        issue = _submit_issue(client)
+        _advance_and_resolve(client, issue["public_id"])
+
+    executed = []
+
+    def _record(conn, cursor, statement, parameters, context, executemany):
+        executed.append(statement)
+
+    event.listen(client.engine, "before_cursor_execute", _record)
+    try:
+        response = client.get("/api/admin/issues")
+    finally:
+        event.remove(client.engine, "before_cursor_execute", _record)
+
+    assert response.status_code == 200
+    assert len(executed) <= 10
+
+
 def test_dashboard_aggregation_is_database_driven_not_python_full_scan(client):
     """Regardless of dataset size, the summary should execute a small,
     constant number of SQL statements (a handful of GROUP BY queries),

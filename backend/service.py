@@ -36,6 +36,7 @@ from backend import insights as insight_rules
 from backend.assignment_rules import DepartmentInactiveError, DepartmentNotFoundError
 from backend.models import Department, Issue, IssueStatus, JurisdictionLevel, ReopenRequest
 from backend.repository import (
+    METRIC_INACTIVE_STATUSES,
     TERMINAL_STATUSES,
     assign_department_to_issue,
     count_active_high_severity_issues,
@@ -68,6 +69,7 @@ from backend.repository import (
     decide_reopen_request as repo_decide_reopen_request,
     get_evidence_by_public_id,
     get_evidence_for_issue,
+    get_issue_ids_with_pending_reopen_request,
     get_pending_reopen_request,
     get_reopen_request_by_public_id,
     resolve_issue as repo_resolve_issue,
@@ -438,7 +440,9 @@ def get_public_tracking(db: Session, public_id: str) -> PublicIssueTrackingRespo
 # --- Authority operations (Milestone 8) --------------------------------------
 
 
-def _build_admin_list_item(issue: Issue) -> AdminIssueListItem:
+def _build_admin_list_item(
+    issue: Issue, *, pending_reopen_issue_ids: set[int] = frozenset()
+) -> AdminIssueListItem:
     return AdminIssueListItem(
         public_id=issue.public_id,
         category=issue.category,
@@ -449,7 +453,18 @@ def _build_admin_list_item(issue: Issue) -> AdminIssueListItem:
         assigned_department=_department_summary(issue.assigned_department),
         created_at=issue.created_at,
         updated_at=issue.updated_at,
+        has_pending_reopen_request=issue.id in pending_reopen_issue_ids,
     )
+
+
+def _build_admin_list_items(db: Session, issues: list[Issue]) -> list[AdminIssueListItem]:
+    """Build a list of AdminIssueListItem, flagging pending reopen requests
+    in one bulk query rather than one per row (see
+    get_issue_ids_with_pending_reopen_request)."""
+    pending_ids = get_issue_ids_with_pending_reopen_request(db, [issue.id for issue in issues])
+    return [
+        _build_admin_list_item(issue, pending_reopen_issue_ids=pending_ids) for issue in issues
+    ]
 
 
 def list_admin_issues(
@@ -484,7 +499,7 @@ def list_admin_issues(
         return None
     items, total = result
     return AdminIssueListResponse(
-        items=[_build_admin_list_item(issue) for issue in items],
+        items=_build_admin_list_items(db, items),
         total=total,
         limit=limit,
         offset=offset,
@@ -573,7 +588,15 @@ def get_dashboard_summary(
     departments outside the scope reads the same as "no issues", so no
     information is misrepresented). Returns None if jurisdiction_code
     doesn't match any real jurisdiction (route -> 404). Never calls
-    Gemini."""
+    Gemini.
+
+    active_issue_count and active_high_critical_count are the single
+    server-computed source of truth for the Command Center's "Active" and
+    "High/Critical Active" KPI cards -- both use METRIC_INACTIVE_STATUSES
+    (backend.repository), which correctly excludes RESOLVED issues from
+    "active", not just CLOSED/REJECTED. The frontend must display these
+    values as-is rather than re-deriving them from by_status/by_severity,
+    since by_severity alone has no status information to filter on."""
     by_status = count_issues_by_status(db, jurisdiction_code=jurisdiction_code)
     if by_status is None:
         return None
@@ -582,11 +605,18 @@ def get_dashboard_summary(
         DepartmentIssueCount(code=department.code, name=department.name, count=count)
         for department, count in count_issues_by_department(db)
     ]
+    active_issue_count = sum(
+        count for status_value, count in by_status.items() if status_value not in METRIC_INACTIVE_STATUSES
+    )
+    high_critical_counts = count_active_high_severity_issues(db, jurisdiction_code=jurisdiction_code)
+    active_high_critical_count = sum(high_critical_counts.values()) if high_critical_counts else 0
     return DashboardSummaryResponse(
         total_issues=sum(by_status.values()),
         by_status=by_status,
         by_severity=by_severity,
         by_department=by_department,
+        active_issue_count=active_issue_count,
+        active_high_critical_count=active_high_critical_count,
     )
 
 
@@ -636,7 +666,7 @@ def list_operational_queue(
         return None
     items, total = result
     return AdminIssueListResponse(
-        items=[_build_admin_list_item(issue) for issue in items],
+        items=_build_admin_list_items(db, items),
         total=total,
         limit=limit,
         offset=offset,
@@ -669,7 +699,7 @@ def list_stale_issues(
         return None
     items, total = result
     return AdminIssueListResponse(
-        items=[_build_admin_list_item(issue) for issue in items],
+        items=_build_admin_list_items(db, items),
         total=total,
         limit=limit,
         offset=offset,
@@ -740,7 +770,7 @@ def get_department_workload_summary(
             name=department.name,
             total_assigned=sum(by_status.values()),
             active_issues=sum(
-                count for st, count in by_status.items() if st not in TERMINAL_STATUSES
+                count for st, count in by_status.items() if st not in METRIC_INACTIVE_STATUSES
             ),
             resolved_issues=by_status[IssueStatus.RESOLVED],
             closed_issues=by_status[IssueStatus.CLOSED],
@@ -974,7 +1004,7 @@ def get_civic_insights(
         (
             department.code,
             department.name,
-            sum(count for st, count in by_status.items() if st not in TERMINAL_STATUSES),
+            sum(count for st, count in by_status.items() if st not in METRIC_INACTIVE_STATUSES),
         )
         for department, by_status in workload
     ]

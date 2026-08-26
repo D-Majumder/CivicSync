@@ -32,7 +32,6 @@
     'Parks and Public Spaces', 'Noise Pollution', 'Illegal Construction',
     'Stray Animals', 'Other',
   ];
-  const TERMINAL_STATUSES = new Set(['CLOSED', 'REJECTED']);
 
   // UI-ONLY convenience copy of backend/transitions.py's VALID_TRANSITIONS,
   // used only to decide which lifecycle buttons to show. The backend
@@ -171,12 +170,19 @@
 
   function issueRowHtml(item) {
     const deptName = item.assigned_department ? item.assigned_department.name : '\u2014 Unassigned';
+    // The issue's own status stays whatever it actually is (typically
+    // RESOLVED) -- a pending reopen request is a separate, additional
+    // badge, never a substitute status label. Text-based (not color-only)
+    // per accessibility requirements.
+    const reopenBadge = item.has_pending_reopen_request
+      ? ' <span class="chip chip-warning" title="A citizen has requested this issue be reopened">Reopen Requested</span>'
+      : '';
     return `
       <tr class="is-clickable" data-public-id="${CivicSyncUtils.escapeHtml(item.public_id)}" data-severity="${CivicSyncUtils.escapeHtml(item.severity)}">
         <td class="cell-id">${CivicSyncUtils.escapeHtml(item.public_id)}</td>
         <td>${CivicSyncUtils.escapeHtml(item.category)}</td>
         <td><span class="chip ${CivicSyncUtils.severityChipClass(item.severity)}">${CivicSyncUtils.escapeHtml(item.severity)}</span></td>
-        <td><span class="chip ${CivicSyncUtils.statusChipClass(item.status)}">${CivicSyncUtils.escapeHtml(item.status_label)}</span></td>
+        <td><span class="chip ${CivicSyncUtils.statusChipClass(item.status)}">${CivicSyncUtils.escapeHtml(item.status_label)}</span>${reopenBadge}</td>
         <td class="cell-muted">${CivicSyncUtils.escapeHtml(deptName)}</td>
         <td class="cell-muted">${CivicSyncUtils.formatTimestamp(item.updated_at)}</td>
       </tr>`;
@@ -252,16 +258,16 @@
 
     if (summaryR.status === 'fulfilled') {
       const s = summaryR.value;
-      const active = Object.entries(s.by_status)
-        .filter(([status]) => !TERMINAL_STATUSES.has(status))
-        .reduce((sum, [, count]) => sum + count, 0);
+      // active_issue_count and active_high_critical_count come straight from
+      // the backend (backend.repository.METRIC_INACTIVE_STATUSES) -- do not
+      // re-derive "active" here from by_status/by_severity. by_severity in
+      // particular has no per-status breakdown, so a client-side count from
+      // it can never correctly exclude RESOLVED/CLOSED/REJECTED issues.
       const resolvedClosed = (s.by_status.RESOLVED || 0) + (s.by_status.CLOSED || 0);
-      const highCritical =
-        (s.by_severity.High || 0) + (s.by_severity.Critical || 0);
       document.getElementById('kpi-total').textContent = s.total_issues;
-      document.getElementById('kpi-active').textContent = active;
+      document.getElementById('kpi-active').textContent = s.active_issue_count;
       document.getElementById('kpi-resolved-closed').textContent = resolvedClosed;
-      document.getElementById('kpi-high-critical').textContent = highCritical;
+      document.getElementById('kpi-high-critical').textContent = s.active_high_critical_count;
     } else {
       showGlobalError('Could not load dashboard summary: ' + summaryR.reason.message);
     }
@@ -831,6 +837,7 @@
             <div><dt>Last Updated</dt><dd>${CivicSyncUtils.formatTimestamp(detail.updated_at)}</dd></div>
             <div><dt>Resolved</dt><dd>${detail.resolved_at ? CivicSyncUtils.formatTimestamp(detail.resolved_at) : '\u2014'}</dd></div>
             <div><dt>Closed</dt><dd>${detail.closed_at ? CivicSyncUtils.formatTimestamp(detail.closed_at) : '\u2014'}</dd></div>
+            ${detail.pending_reopen_request ? `<div><dt>Reopen Request</dt><dd><span class="chip chip-warning">Pending Review</span></dd></div>` : ''}
           </dl>
         </div>
       </div>
