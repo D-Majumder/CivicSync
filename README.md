@@ -84,7 +84,7 @@ ai/                   Gemini prompt, schema, and client — the only place Gemin
 alembic/               Schema migrations (13 revisions, linear history)
 evaluation/             AI evaluation harness (dataset, runner, report generator)
 scripts/                 Demo/development data seeding (isolated, reversible, never auto-run)
-tests/                    781 tests across the backend, evaluation harness, and demo tooling
+tests/                    821 tests across the backend, evaluation harness, and demo tooling
 ```
 
 **Layering:** `main.py` (routes) → `service.py` (business rules) → `repository.py` (persistence) → `models.py` (schema). `ai/client.py` is called only from `service.py` — never directly from a route, and never from `repository.py`.
@@ -286,7 +286,7 @@ Creates multiple departments, severities, and lifecycle states; a resolved issue
 python -m pytest -q
 ```
 
-Current baseline: **781 passed, 1 skipped**.
+Current baseline: **821 passed, 1 skipped**.
 
 ## 🧪 Running the evaluation harness
 
