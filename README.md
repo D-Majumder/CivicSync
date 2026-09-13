@@ -10,24 +10,24 @@
   <em>Citizen complaint → AI understanding → jurisdiction routing → authority action → resolution → evidence → citizen transparency</em>
 </p>
 
-[![Backend](https://img.shields.io/badge/backend-FastAPI-0b1c30)](#-tech-stack)
-[![Database](https://img.shields.io/badge/database-SQLite%20%2B%20Alembic-0b1c30)](#-tech-stack)
-[![AI](https://img.shields.io/badge/AI-Google%20Gemini-0b1c30)](#-ai-layer--boundaries)
-[![Languages](https://img.shields.io/badge/citizen%20UI-English%20%C2%B7%20Hindi%20%C2%B7%20Bengali-0b1c30)](#-multilingual-support)
-[![Tests](https://img.shields.io/badge/tests-781%20passing-1e7a34)](#-running-tests)
-[![Status](https://img.shields.io/badge/status-hackathon%20prototype-9a6700)](#-honest-limitations)
+[![Backend](https://img.shields.io/badge/backend-FastAPI-0b1c30)](#tech-stack)
+[![Database](https://img.shields.io/badge/database-SQLite%20%2B%20Alembic-0b1c30)](#tech-stack)
+[![AI](https://img.shields.io/badge/AI-Google%20Gemini-0b1c30)](#ai-layer--boundaries)
+[![Languages](https://img.shields.io/badge/citizen%20UI-English%20%C2%B7%20Hindi%20%C2%B7%20Bengali-0b1c30)](#multilingual-support)
+[![Tests](https://img.shields.io/badge/tests-821%20passing-1e7a34)](#running-tests)
+[![Status](https://img.shields.io/badge/status-hackathon%20prototype-9a6700)](#honest-limitations)
 
 </div>
 
 <br/>
 
-## 📖 Overview
+## Overview
 
 CivicSync turns an unstructured citizen complaint — typed in **English, Hindi, or Bengali**, spelling mistakes and all — into a structured, trackable civic record: classified by category and severity, routed toward the right department, and followed all the way through to an authority's official resolution.
 
 This is a working prototype, not a production deployment. Every claim in this document describes code that actually exists in this repository today — nothing here is aspirational.
 
-## 🎯 Problem being solved
+## Problem being solved
 
 Civic complaint reporting in many municipalities is fragmented: phone calls, paper forms, or scattered messages that are hard to categorize, prioritize, or follow up on.
 
@@ -35,29 +35,29 @@ Civic complaint reporting in many municipalities is fragmented: phone calls, pap
 - **Authorities** lack a single operational view of what's outstanding, urgent, or clustering geographically.
 - **Language** is a quiet fourth barrier — civic tools built English-only exclude the people they're meant to serve.
 
-## ✨ What CivicSync does
+## What CivicSync does
 
 - Accepts a citizen's free-text complaint and asks Gemini to extract a structured record — category, problem summary, location description, duration, affected population, severity, and a confidence score.
 - Gives every citizen a public tracking ID to follow their report's status, resolution, and any evidence attached.
 - Gives authorities a jurisdiction-scoped dashboard: an operational queue, a full issue lifecycle, resolution/evidence workflows, citizen reopen-request handling, and deterministic operational/geospatial insights.
 - Never lets AI output become official record on its own — every status change, assignment, resolution, and reopening decision is a specific, auditable action taken through the application's own governed transition rules.
 
-## 🧩 Core features
+## Core features
 
 | | |
 |---|---|
-| 🤖 **AI complaint understanding** | Gemini-backed extraction with an explicit no-fabrication rule |
-| 🔄 **Full lifecycle state machine** | 9 statuses, every transition validated and recorded in an append-only history |
-| 🗺️ **Jurisdiction hierarchy** | Country → state → district → local body, scoped from creation |
-| 📎 **Resolution evidence** | Authorities attach real, format-validated photo evidence |
-| 🔓 **Citizen reopening** | A governed request/review workflow, never a shortcut |
-| 🌐 **Multilingual citizen UI** | English, Hindi, Bengali — original text always preserved exactly |
-| 📍 **Consent-based geolocation** | Browser Geolocation API only, never inferred |
-| 🔥 **Deterministic hotspot detection** | Plain haversine geometry — never AI-decided |
-| 📊 **Operational intelligence** | Resolution rate, reopen rate, evidence coverage, aging, grounded advisories |
-| 🧪 **A real evaluation harness** | Measures AI behavior instead of just demoing it |
+| **AI complaint understanding** | Gemini-backed extraction with an explicit no-fabrication rule |
+| **Full lifecycle state machine** | 9 statuses, every transition validated and recorded in an append-only history |
+| **Jurisdiction hierarchy** | Country → state → district → local body, scoped from creation |
+| **Resolution evidence** | Authorities attach real, format-validated photo evidence |
+| **Citizen reopening** | A governed request/review workflow, never a shortcut |
+| **Multilingual citizen UI** | English, Hindi, Bengali — original text always preserved exactly |
+| **Consent-based geolocation** | Browser Geolocation API only, never inferred |
+| **Deterministic hotspot detection** | Plain haversine geometry — never AI-decided |
+| **Operational intelligence** | Resolution rate, reopen rate, evidence coverage, aging, grounded advisories |
+| **A real evaluation harness** | Measures AI behavior instead of just demoing it |
 
-## 🔁 End-to-end workflow
+## End-to-end workflow
 
 ```mermaid
 flowchart TD
@@ -75,13 +75,13 @@ flowchart TD
 
 Deterministic geospatial/operational intelligence (hotspot detection, resolution KPIs, priority advisories) is computed continuously from this same data — never as a substitute for it.
 
-## 🏗️ System architecture
+## System architecture
 
 ```
 frontend/            Vanilla JS/CSS/HTML — citizen pages, authority dashboard, no framework/build step
 backend/              FastAPI application: models, repository, service, API routes
 ai/                   Gemini prompt, schema, and client — the only place Gemini is called from
-alembic/               Schema migrations (13 revisions, linear history)
+alembic/               Schema migrations (12 revisions, linear history)
 evaluation/             AI evaluation harness (dataset, runner, report generator)
 scripts/                 Demo/development data seeding (isolated, reversible, never auto-run)
 tests/                    821 tests across the backend, evaluation harness, and demo tooling
@@ -89,7 +89,7 @@ tests/                    821 tests across the backend, evaluation harness, and 
 
 **Layering:** `main.py` (routes) → `service.py` (business rules) → `repository.py` (persistence) → `models.py` (schema). `ai/client.py` is called only from `service.py` — never directly from a route, and never from `repository.py`.
 
-## 🤖 AI layer & boundaries
+## AI layer & boundaries
 
 Gemini is used for exactly two things in this codebase:
 
@@ -104,37 +104,37 @@ Gemini is used for exactly two things in this codebase:
 - ❌ Have its output persisted as fact on failure — a failed AI call returns a sanitized error, never a fabricated result
 - ❌ Invent a category, location, severity, or cause the citizen's text doesn't support
 
-Every one of these actions is a real code path, gated by the same transition-validation logic regardless of who or what suggested the action. See [Evaluation methodology](#-evaluation-methodology--harness) for how the no-fabrication rule is actually measured.
+Every one of these actions is a real code path, gated by the same transition-validation logic regardless of who or what suggested the action. See [Evaluation methodology](#evaluation-methodology--harness) for how the no-fabrication rule is actually measured.
 
-## 🌐 Multilingual support
+## Multilingual support
 
 The citizen-facing pages (report form and tracking page) support **English, Hindi, and Bengali** via a small dictionary-based i18n layer — no external translation service, no framework. The citizen's original complaint text is stored and displayed exactly as typed; it is never machine-translated or overwritten. The extraction prompt is explicitly instructed to tolerate spelling mistakes, transliteration, and colloquial phrasing across all three languages. The authority dashboard is English-only by design.
 
-## 📍 Location & geospatial intelligence
+## Location & geospatial intelligence
 
 Citizens may optionally share their device location (browser Geolocation API only — no maps SDK, no third-party geocoding). Authorities see a deterministic hotspot detector that clusters nearby, recent, geo-tagged complaints using plain haversine-distance geometry — cluster membership is never decided by AI.
 
-## 🖥️ Authority operations dashboard
+## Authority operations dashboard
 
 A jurisdiction-scoped command center: live KPI summary, resolution and reopening metrics, civic hotspots, status/severity/department/aging breakdowns, a filterable issue queue and full issue list, per-issue detail with assignment, lifecycle actions, evidence upload, and reopen-request review.
 
-## 🧠 Civic Intelligence
+## Civic Intelligence
 
 A dedicated page presenting grounded, deterministic insights — an on-demand AI operational briefing, and a Priority Advisory feed (e.g. unresolved high-severity issues, recurring categories, reopened-issue follow-ups, detected hotspots) computed from real data, each shown with its supporting evidence values, never a bare claim.
 
-## 📎 Resolution evidence
+## Resolution evidence
 
 An authority resolving an issue can attach photo evidence (JPEG/PNG/WebP, validated by real image-format inspection, not just a file extension). Evidence is visible to the citizen on their tracking page, clearly tied to the specific resolution it documents.
 
-## 🔎 Citizen tracking
+## Citizen tracking
 
 Every issue has a public tracking ID. The tracking page shows current status, full timeline, AI-classified severity, and — once resolved — the official resolution note, timestamp, and evidence, without exposing internal database identifiers, the resolving authority's identity, or precise device coordinates.
 
-## 🔓 Citizen reopen workflow
+## Citizen reopen workflow
 
 If a citizen believes a resolution was inadequate, they can submit a reopen request with a reason. This never reopens the issue by itself — it creates a request an authority must explicitly approve or reject, through the exact same lifecycle-transition mechanism as every other status change.
 
-## 🔒 Privacy and safety principles
+## Privacy and safety principles
 
 - Public tracking never exposes the resolving authority's identity, internal database IDs, or precise coordinates.
 - Evidence files are served through an authenticated/ownership-checked endpoint, never a public static directory.
@@ -142,11 +142,11 @@ If a citizen believes a resolution was inadequate, they can submit a reopen requ
 - AI receives only the minimum data needed for a given task.
 - Malicious or malformed input (path traversal attempts, spoofed file types, out-of-range coordinates) is rejected deterministically, not left to AI judgment.
 
-## ⚖️ AI-derived information vs. official authority decisions
+## AI-derived information vs. official authority decisions
 
 Every screen that shows AI output labels it as such and keeps it visually distinct from the issue's official record. AI-derived fields (category, severity, confidence, suggested department) are always advisory; official fields (status, assigned department, resolution, reopening decisions) can only change through an authenticated authority action or a citizen-triggered request an authority must approve. Nothing on the AI side of that line can silently become official.
 
-## 🧪 Evaluation methodology & harness
+## Evaluation methodology & harness
 
 `evaluation/` is a small, standalone, reproducible evaluation of the real complaint-understanding pipeline (`ai/client.py::analyze_complaint`, unmodified) — never a second AI implementation. It runs a **52-case** hand-curated dataset spanning English/Hindi/Bengali, spelling errors, transliteration, incomplete words, colloquial phrasing, and deliberately ambiguous/insufficient-information complaints, and scores the results with **deterministic, non-LLM rules**.
 
@@ -160,7 +160,7 @@ python3 evaluation/run_evaluation.py --delay-seconds 15   # default; free-tier r
 python3 evaluation/generate_report.py                      # produces evaluation/report.md
 ```
 
-## 🖼️ Product preview
+## Product preview
 
 <table>
 <tr>
@@ -201,9 +201,9 @@ python3 evaluation/generate_report.py                      # produces evaluation
 
 </div>
 
-*All screenshots above were captured from the running application using synthetic demo data (see [Demo data seeding](#-demo-data-seeding--cleanup)) — no real citizen information.*
+*All screenshots above were captured from the running application using synthetic demo data (see [Demo data seeding](#demo-data-seeding--cleanup)) — no real citizen information.*
 
-## 🛠️ Tech stack
+## Tech stack
 
 | Layer | Technology |
 |---|---|
@@ -214,7 +214,7 @@ python3 evaluation/generate_report.py                      # produces evaluation
 | Auth | PBKDF2-HMAC-SHA256 password hashing, signed session cookies (`itsdangerous`) |
 | Testing | pytest |
 
-## 📁 Project structure
+## Project structure
 
 ```
 CivicSync/
@@ -229,17 +229,17 @@ CivicSync/
 └── .env.example                    Environment variable template
 ```
 
-## ⚙️ Installation & setup
+## Installation & setup
 
 ```bash
-git clone <this-repository>
+git clone https://github.com/D-Majumder/CivicSync
 cd CivicSync
 python3 -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r backend/requirements.txt
 ```
 
-## 🔑 Environment configuration
+## Environment configuration
 
 ```bash
 cp .env.example .env
@@ -253,15 +253,15 @@ cp .env.example .env
 | `SESSION_SECRET` | Yes | Signs authority session cookies — generate with `python3 -c "import secrets; print(secrets.token_hex(32))"`. |
 | `CIVICSYNC_DEFAULT_JURISDICTION_CODE` | Yes | The jurisdiction every new issue is scoped to (must match a real, active jurisdiction). |
 
-## 🗄️ Database initialization
+## Database initialization
 
 ```bash
 alembic upgrade head
 ```
 
-This applies all 13 migrations and creates `civicsync.db` (SQLite) if it doesn't already exist.
+This applies all 12 migrations and creates `civicsync.db` (SQLite) if it doesn't already exist.
 
-## ▶️ Running the application
+## Running the application
 
 ```bash
 uvicorn backend.main:app --reload
@@ -271,7 +271,7 @@ uvicorn backend.main:app --reload
 - Citizen tracking → `http://127.0.0.1:8000/track`
 - Authority portal → `http://127.0.0.1:8000/authority/login`
 
-## 🌱 Demo data seeding & cleanup
+## Demo data seeding & cleanup
 
 ```bash
 python3 scripts/seed_demo_data.py            # seed a realistic, varied demo dataset
@@ -280,7 +280,7 @@ python3 scripts/seed_demo_data.py --clear     # remove exactly what was seeded, 
 
 Creates multiple departments, severities, and lifecycle states; a resolved issue with evidence; a reopened issue; a geographically clustered set of complaints; and multilingual entries. Standalone, never runs automatically, and tracks exactly what it created so `--clear` never touches anything else.
 
-## ✅ Running tests
+## Running tests
 
 ```bash
 python -m pytest -q
@@ -288,11 +288,11 @@ python -m pytest -q
 
 Current baseline: **821 passed, 1 skipped**.
 
-## 🧪 Running the evaluation harness
+## Running the evaluation harness
 
-See [Evaluation methodology](#-evaluation-methodology--harness) above.
+See [Evaluation methodology](#evaluation-methodology--harness) above.
 
-## ⚠️ Honest limitations
+## Honest limitations
 
 - This is a hackathon-stage prototype — no production deployment, no real users, no uptime or security guarantees.
 - Evidence storage uses the local filesystem by default; not durable across redeploys on an ephemeral filesystem unless a persistent volume is explicitly attached.
@@ -301,11 +301,11 @@ See [Evaluation methodology](#-evaluation-methodology--harness) above.
 - The authority side is a single shared demo account, not a multi-user/role-based system.
 - No production claims, deployment guarantees, user counts, or third-party integrations beyond what's listed above should be inferred from this document — none exist.
 
-## 🏆 Hackathon context
+## Hackathon context
 
 CivicSync was built as a hackathon submission exploring how AI-assisted classification can support — rather than replace — municipal civic-issue workflows, with an explicit focus on multilingual accessibility and a clear boundary between AI-derived and officially authorized information.
 
-## 🚀 Development journey
+## Development journey
 
 | Phase | Focus |
 |---|---|
@@ -319,9 +319,9 @@ CivicSync was built as a hackathon submission exploring how AI-assisted classifi
 
 <div align="center">
 
-### 👤 Author
+### Author
 
-Built as a hackathon project by the CivicSync team.
+Built as a hackathon project by D-Majumder.
 
 <sub>See <a href="PITCH.md">PITCH.md</a> for the full project pitch, live demo script, and roadmap.</sub>
 
