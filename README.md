@@ -232,8 +232,8 @@ CivicSync/
 ## Installation & setup
 
 ```bash
-git clone https://github.com/D-Majumder/CivicSync
-cd CivicSync
+git clone https://github.com/D-Majumder/civic-sync
+cd civic-sync
 python3 -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r backend/requirements.txt
